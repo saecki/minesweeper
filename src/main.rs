@@ -276,26 +276,28 @@ impl App for MinesweeperApp {
                         self.cursor_left();
                     }
 
-                    // select or hint
-                    if i.key_pressed(Key::Enter) || i.key_pressed(Key::Space) {
-                        if i.modifiers.ctrl {
-                            self.game.hint((self.cursor_x, self.cursor_y));
-                        } else {
-                            self.game.click((self.cursor_x, self.cursor_y));
-                        }
+                    if ui.input(|i| i.key_pressed(Key::R)) {
+                        self.game = Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY);
                     }
 
                     if self.game.play_state == PlayState::Playing {
+                        // sweep
+                        if i.key_pressed(Key::Enter) || i.key_pressed(Key::Space) {
+                            if i.modifiers.ctrl {
+                                self.game.hint((self.cursor_x, self.cursor_y));
+                            } else {
+                                self.game.click((self.cursor_x, self.cursor_y));
+                            }
+                        }
+
                         let mut clicked = false;
                         let mut hint = false;
-
                         if i.pointer.primary_clicked() {
                             clicked = true;
                         } else if i.pointer.secondary_clicked() {
                             clicked = true;
                             hint = true;
                         }
-
                         if clicked {
                             if let Some(pos) = i.pointer.hover_pos() {
                                 let cell_idx = (pos.to_vec2() - board_offset) / cell_size;
@@ -375,13 +377,12 @@ impl App for MinesweeperApp {
                                         }
                                     }
                                     FieldState::Mine => {
-                                        painter.rect(
-                                            cell_rect,
-                                            0.0,
-                                            Color32::from_rgb(0xd0, 0x60, 0x30),
-                                            cell_stroke,
-                                        );
-
+                                        let color = match self.game.play_state {
+                                            PlayState::Won => Color32::from_gray(0x80),
+                                            PlayState::Lost => Color32::from_rgb(0xd0, 0x60, 0x30),
+                                            PlayState::Playing => unreachable!("can't show a mine if still playing"),
+                                        };
+                                        painter.rect(cell_rect, 0.0, color, cell_stroke);
                                         painter.text(
                                             cell_center_pos.to_pos2(),
                                             Align2::CENTER_CENTER,
@@ -406,41 +407,6 @@ impl App for MinesweeperApp {
                     Color32::TRANSPARENT,
                     Stroke::new(2.0, Color32::from_rgb(0xd0, 0xd0, 0xf0)),
                 );
-
-                // message
-                let screen_center = (available_size * 0.5).to_pos2();
-                let text_size = board_size.y * 0.15;
-                match self.game.play_state {
-                    PlayState::Playing => (),
-                    PlayState::Won => {
-                        let mut text_style = TextStyle::Monospace.resolve(ctx.style().as_ref());
-                        text_style.size = text_size;
-                        painter.text(
-                            screen_center,
-                            Align2::CENTER_CENTER,
-                            "You Won",
-                            text_style,
-                            Color32::from_rgb(0x70, 0xf0, 0x20),
-                        );
-                    }
-                    PlayState::Lost => {
-                        let mut text_style = TextStyle::Monospace.resolve(ctx.style().as_ref());
-                        text_style.size = text_size;
-                        painter.text(
-                            screen_center,
-                            Align2::CENTER_CENTER,
-                            "You Lost",
-                            text_style,
-                            Color32::from_rgb(0xd0, 0x00, 0x00),
-                        );
-                    }
-                }
-
-                if self.game.play_state != PlayState::Playing {
-                    if ui.input(|i| i.key_pressed(Key::R)) {
-                        self.game = Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY);
-                    }
-                }
             });
     }
 }
