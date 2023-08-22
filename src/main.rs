@@ -339,6 +339,9 @@ impl App for MinesweeperApp {
                             }
                             ShowState::Show => {
                                 let cell_center_pos = cell_pos + cell_size / 2.0;
+                                let mut text_style =
+                                    TextStyle::Monospace.resolve(ctx.style().as_ref());
+                                text_style.size = cell_size.y * 0.8;
 
                                 match field.state {
                                     FieldState::Free(c) => {
@@ -349,16 +352,25 @@ impl App for MinesweeperApp {
                                             cell_stroke,
                                         );
 
+
                                         if c != 0 {
-                                            let mut text_style =
-                                                TextStyle::Monospace.resolve(ctx.style().as_ref());
-                                            text_style.size = cell_size.y * 0.8;
+                                            const COLORS: [Color32; 8] = [
+                                                Color32::BLUE,
+                                                Color32::GREEN,
+                                                Color32::RED,
+                                                Color32::DARK_BLUE,
+                                                Color32::DARK_RED,
+                                                Color32::LIGHT_BLUE,
+                                                Color32::BLACK,
+                                                Color32::GRAY,
+                                            ];
+                                            let num_color = COLORS[c as usize - 1];
                                             painter.text(
                                                 cell_center_pos.to_pos2(),
                                                 Align2::CENTER_CENTER,
                                                 c,
                                                 text_style,
-                                                Color32::GREEN,
+                                                num_color,
                                             );
                                         }
                                     }
@@ -373,9 +385,9 @@ impl App for MinesweeperApp {
                                         painter.text(
                                             cell_center_pos.to_pos2(),
                                             Align2::CENTER_CENTER,
-                                            "*",
-                                            TextStyle::Monospace.resolve(ctx.style().as_ref()),
-                                            Color32::GREEN,
+                                            "#",
+                                            text_style,
+                                            Color32::BLACK,
                                         );
                                     }
                                 }
