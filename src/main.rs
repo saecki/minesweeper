@@ -96,11 +96,10 @@ impl Game {
 
     fn check_if_won(&mut self) {
         for f in self.fields.iter() {
-            if FieldState::Mine == f.state {
-                return;
-            }
-            if f.show != ShowState::Show {
-                return;
+            if let FieldState::Free(_) = f.state {
+                if f.show != ShowState::Show {
+                    return;
+                }
             }
         }
 
