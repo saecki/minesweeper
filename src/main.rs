@@ -241,7 +241,7 @@ impl App for MinesweeperApp {
                 let board_rect = Rect::from_min_size(board_offset.to_pos2(), board_size);
 
                 // input
-                // TODO: make it impossible to lose on the click
+                // TODO: make it impossible to lose on the first click
                 ctx.input(|i| {
                     // arrow keys
                     if i.key_pressed(Key::ArrowUp) {
