@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
 use eframe::{App, CreationContext, NativeOptions};
-use egui::{Align, Align2, CentralPanel, Color32, FontId, Frame, Key, Layout, Rect, RichText, Stroke, TextStyle, Vec2};
+use egui::{Align, Align2, Button, CentralPanel, Color32, FontId, Frame, Key, Layout, Pos2, Rect, RichText, Stroke, TextStyle, Vec2};
 use rand::Rng;
 
 const GAME_WIDTH: i16 = 20;
@@ -123,7 +123,11 @@ impl Game {
     fn lose(&mut self) {
         let duration = Instant::now() - self.start_time;
         self.play_state = PlayState::Lost(duration);
-        self.show_all();
+        for f in self.fields.iter_mut() {
+            if let FieldState::Mine = f.state {
+                f.show = ShowState::Show;
+            }
+        }
     }
 
     fn check_if_won(&mut self) {
@@ -137,10 +141,6 @@ impl Game {
 
         let duration = Instant::now() - self.start_time;
         self.play_state = PlayState::Won(duration);
-        self.show_all();
-    }
-
-    fn show_all(&mut self) {
         for f in self.fields.iter_mut() {
             f.show = ShowState::Show;
         }
@@ -287,25 +287,36 @@ impl App for MinesweeperApp {
         CentralPanel::default()
             .frame(Frame::none())
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    let open_mine_count = self.game.open_mine_count().to_string();
-                    let text = RichText::new(open_mine_count).font(FontId::monospace(30.0));
-                    ui.label(text);
-
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        let play_duration = format_duration(self.game.play_duration());
-                        let text = RichText::new(play_duration).font(FontId::monospace(30.0));
-                        ui.label(text);
-                    });
-                });
-
-                let available_size = ui.available_size();
+                let menu_bar_height = 40.0;
+                let available_size = ui.available_size() - Vec2::new(0.0, menu_bar_height);
                 let cells = Vec2::new(self.game.width as f32, self.game.height as f32);
                 let ratio = available_size / cells;
                 let cell_size = Vec2::splat(ratio.min_elem());
                 let board_size = cells * cell_size;
-                let board_offset = ui.cursor().min + (available_size - board_size) * 0.5;
+                let board_offset = Pos2::new(0.0, menu_bar_height) + (available_size - board_size) * 0.5;
                 let board_rect = Rect::from_min_size(board_offset, board_size);
+                ui.allocate_ui(Vec2::new(ui.available_width(), menu_bar_height), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add_space(board_offset.x);
+                        let open_mine_count = self.game.open_mine_count().to_string();
+                        let text = RichText::new(open_mine_count).font(FontId::monospace(30.0));
+                        ui.label(text);
+
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.add_space(board_offset.x);
+                            let play_duration = format_duration(self.game.play_duration());
+                            let text = RichText::new(play_duration).font(FontId::monospace(30.0));
+                            ui.label(text);
+
+                            ui.add_space(20.0);
+                            let text = RichText::new("\u{21bb}").font(FontId::monospace(30.0));
+                            let button = Button::new(text).frame(false);
+                            if ui.add(button).clicked() {
+                                self.game = Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY);
+                            }
+                        });
+                    });
+                });
 
                 // input
                 ctx.input(|i| {
@@ -367,7 +378,7 @@ impl App for MinesweeperApp {
                         if clicked {
                             if let Some(pos) = i.pointer.hover_pos() {
                                 let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
-                                let (x, y) = (cell_idx.x as i16, cell_idx.y as i16);
+                                let (x, y) = (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16);
 
                                 if x >= 0 && x < self.game.width && y >= 0 && y < self.game.height {
                                     if hint {
