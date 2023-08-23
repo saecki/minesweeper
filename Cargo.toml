@@ -3,6 +3,9 @@ name = "minesweeper"
 version = "0.1.0"
 edition = "2021"
 
+[profile.release]
+strip = true
+
 [dependencies]
 eframe = "0.22.0"
 egui = "0.22.0"

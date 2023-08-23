@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 use std::time::{Duration, Instant};
 
 use eframe::{App, CreationContext, NativeOptions};
@@ -84,6 +86,10 @@ impl Game {
     }
 
     fn click(&mut self, (x, y): (i16, i16)) {
+        if x < 0 || x >= self.width || y < 0 || y >= self.height {
+            return;
+        }
+
         loop {
             let field = &mut self[(x, y)];
             if field.show == ShowState::Hint {
@@ -91,7 +97,30 @@ impl Game {
             }
 
             match field.state {
-                FieldState::Free(_) => {
+                FieldState::Free(neighbours) => {
+                    if let ShowState::Show = field.show {
+                        let num_hinted_mines = self.count_hinted_mine((x - 1, y - 1))
+                            + self.count_hinted_mine((x - 1, y + 0))
+                            + self.count_hinted_mine((x - 1, y + 1))
+                            + self.count_hinted_mine((x + 0, y - 1))
+                            + self.count_hinted_mine((x + 0, y + 1))
+                            + self.count_hinted_mine((x + 1, y - 1))
+                            + self.count_hinted_mine((x + 1, y + 0))
+                            + self.count_hinted_mine((x + 1, y + 1));
+
+                        if num_hinted_mines == neighbours {
+                            self.show_if_not_hinted((x - 1, y - 1));
+                            self.show_if_not_hinted((x - 1, y + 0));
+                            self.show_if_not_hinted((x - 1, y + 1));
+                            self.show_if_not_hinted((x + 0, y - 1));
+                            self.show_if_not_hinted((x + 0, y + 1));
+                            self.show_if_not_hinted((x + 1, y - 1));
+                            self.show_if_not_hinted((x + 1, y + 0));
+                            self.show_if_not_hinted((x + 1, y + 1));
+                        }
+                    }
+
+
                     self.show_neighbors((x, y));
                     self.check_if_won();
                     break;
@@ -112,6 +141,10 @@ impl Game {
     }
 
     fn hint(&mut self, (x, y): (i16, i16)) {
+        if x < 0 || x >= self.width || y < 0 || y >= self.height {
+            return;
+        }
+
         let field = &mut self[(x, y)];
         if field.show == ShowState::Hint {
             field.show = ShowState::Hide;
@@ -146,6 +179,24 @@ impl Game {
         }
     }
 
+    fn show_if_not_hinted(&mut self, (x, y): (i16, i16)) {
+        if x < 0 || x >= self.width || y < 0 || y >= self.height {
+            return;
+        }
+
+        let field = &mut self[(x, y)];
+        if field.show == ShowState::Show || field.show == ShowState::Hint {
+            return;
+        }
+
+        if let FieldState::Mine = field.state {
+            self.lose();
+            return;
+        }
+
+        self.show_neighbors((x, y));
+    }
+
     fn show_neighbors(&mut self, (x, y): (i16, i16)) {
         if x < 0 || x >= self.width || y < 0 || y >= self.height {
             return;
@@ -170,6 +221,18 @@ impl Game {
         self.show_neighbors((x + 1, y - 1));
         self.show_neighbors((x + 1, y + 0));
         self.show_neighbors((x + 1, y + 1));
+    }
+
+    fn count_hinted_mine(&self, (x, y): (i16, i16)) -> u8 {
+        if x < 0 || x >= self.width || y < 0 || y >= self.height {
+            return 0;
+        }
+
+        if self[(x, y )].show == ShowState::Hint {
+            return 1;
+        }
+
+        return 0;
     }
 
     fn open_mine_count(&self) -> i32 {
@@ -380,12 +443,10 @@ impl App for MinesweeperApp {
                                 let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
                                 let (x, y) = (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16);
 
-                                if x >= 0 && x < self.game.width && y >= 0 && y < self.game.height {
-                                    if hint {
-                                        self.game.hint((x, y));
-                                    } else {
-                                        self.game.click((x, y));
-                                    }
+                                if hint {
+                                    self.game.hint((x, y));
+                                } else {
+                                    self.game.click((x, y));
                                 }
                             }
                         }
