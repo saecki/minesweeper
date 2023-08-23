@@ -1,10 +1,12 @@
+use std::time::{Duration, Instant};
+
 use eframe::{App, CreationContext, NativeOptions};
-use egui::{Align2, CentralPanel, Color32, Frame, Key, Rect, Stroke, TextStyle, Vec2};
+use egui::{Align, Align2, CentralPanel, Color32, FontId, Frame, Key, Layout, Rect, RichText, Stroke, TextStyle, Vec2};
 use rand::Rng;
 
 const GAME_WIDTH: i16 = 20;
 const GAME_HEIGHT: i16 = 14;
-const MINE_PROBABILITY: f64 = 0.18;
+const MINE_PROBABILITY: f64 = 0.15;
 
 struct MinesweeperApp {
     game: Game,
@@ -13,10 +15,13 @@ struct MinesweeperApp {
 }
 
 struct Game {
+    first: bool,
+    probability: f64,
     play_state: PlayState,
     width: i16,
     height: i16,
     fields: Vec<Field>,
+    start_time: Instant,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -29,32 +34,45 @@ enum PlayState {
 impl Game {
     fn new(width: i16, height: i16, probability: f64) -> Self {
         let len = (width * height) as usize;
-        let mut game = Game {
+        let mut game = Self {
+            first: true,
+            probability,
             play_state: PlayState::Playing,
             width,
             height,
             fields: vec![Field::free(0); len],
+            start_time: Instant::now(),
         };
 
-        let mut rng = rand::thread_rng();
-        for y in 0..height {
-            for x in 0..width {
-                if rng.gen_bool(probability) {
-                    game[(x, y)] = Field::mine();
+        game.gen_board();
 
-                    game.increment_field((x - 1, y - 1));
-                    game.increment_field((x - 1, y + 0));
-                    game.increment_field((x - 1, y + 1));
-                    game.increment_field((x + 0, y - 1));
-                    game.increment_field((x + 0, y + 1));
-                    game.increment_field((x + 1, y - 1));
-                    game.increment_field((x + 1, y + 0));
-                    game.increment_field((x + 1, y + 1));
+        game
+    }
+
+    fn clear_board(&mut self) {
+        for f in self.fields.iter_mut() {
+            *f = Field::free(0);
+        }
+    }
+
+    fn gen_board(&mut self) {
+        let mut rng = rand::thread_rng();
+        for y in 0..self.height {
+            for x in 0..self.width {
+                if rng.gen_bool(self.probability) {
+                    self[(x, y)] = Field::mine();
+
+                    self.increment_field((x - 1, y - 1));
+                    self.increment_field((x - 1, y + 0));
+                    self.increment_field((x - 1, y + 1));
+                    self.increment_field((x + 0, y - 1));
+                    self.increment_field((x + 0, y + 1));
+                    self.increment_field((x + 1, y - 1));
+                    self.increment_field((x + 1, y + 0));
+                    self.increment_field((x + 1, y + 1));
                 }
             }
         }
-
-        game
     }
 
     fn increment_field(&mut self, (x, y): (i16, i16)) {
@@ -66,18 +84,31 @@ impl Game {
     }
 
     fn click(&mut self, (x, y): (i16, i16)) {
-        let field = &mut self[(x, y)];
-        if field.show == ShowState::Hint {
-            return;
+        loop {
+            let field = &mut self[(x, y)];
+            if field.show == ShowState::Hint {
+                return;
+            }
+
+            match field.state {
+                FieldState::Free(_) => {
+                    self.show_neighbors((x, y));
+                    self.check_if_won();
+                    break;
+                }
+                FieldState::Mine => {
+                    if !self.first {
+                        self.lose();
+                        break;
+                    } else {
+                        self.clear_board();
+                        self.gen_board();
+                    }
+                }
+            }
         }
 
-        match field.state {
-            FieldState::Free(_) => {
-                self.show_neighbors((x, y));
-                self.check_if_won();
-            }
-            FieldState::Mine => self.lose(),
-        }
+        self.first = false;
     }
 
     fn hint(&mut self, (x, y): (i16, i16)) {
@@ -137,6 +168,24 @@ impl Game {
         self.show_neighbors((x + 1, y - 1));
         self.show_neighbors((x + 1, y + 0));
         self.show_neighbors((x + 1, y + 1));
+    }
+
+    fn open_mine_count(&self) -> i32 {
+        let mut mines = 0;
+        let mut hints = 0;
+        for f in self.fields.iter() {
+            if let FieldState::Mine = f.state {
+                mines += 1;
+            }
+            if let ShowState::Hint = f.show {
+                hints += 1;
+            }
+        }
+        mines - hints
+    }
+
+    fn play_duration(&self) -> Duration {
+        Instant::now() - self.start_time
     }
 }
 
@@ -232,16 +281,27 @@ impl App for MinesweeperApp {
         CentralPanel::default()
             .frame(Frame::none())
             .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let open_mine_count = self.game.open_mine_count().to_string();
+                    let text = RichText::new(open_mine_count).font(FontId::monospace(30.0));
+                    ui.label(text);
+
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        let play_duration = format_duration(self.game.play_duration());
+                        let text = RichText::new(play_duration).font(FontId::monospace(30.0));
+                        ui.label(text);
+                    });
+                });
+
                 let available_size = ui.available_size();
                 let cells = Vec2::new(self.game.width as f32, self.game.height as f32);
                 let ratio = available_size / cells;
                 let cell_size = Vec2::splat(ratio.min_elem());
                 let board_size = cells * cell_size;
-                let board_offset = (available_size - board_size) / 2.0;
-                let board_rect = Rect::from_min_size(board_offset.to_pos2(), board_size);
+                let board_offset = ui.cursor().min + (available_size - board_size) * 0.5;
+                let board_rect = Rect::from_min_size(board_offset, board_size);
 
                 // input
-                // TODO: make it impossible to lose on the first click
                 ctx.input(|i| {
                     // arrow keys
                     if i.key_pressed(Key::ArrowUp) {
@@ -300,7 +360,7 @@ impl App for MinesweeperApp {
                         }
                         if clicked {
                             if let Some(pos) = i.pointer.hover_pos() {
-                                let cell_idx = (pos.to_vec2() - board_offset) / cell_size;
+                                let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
                                 let (x, y) = (cell_idx.x as i16, cell_idx.y as i16);
 
                                 if x >= 0 && x < self.game.width && y >= 0 && y < self.game.height {
@@ -325,7 +385,7 @@ impl App for MinesweeperApp {
                     for x in 0..self.game.width {
                         let field = self.game[(x, y)];
                         let cell_pos = board_offset + Vec2::new(x as f32, y as f32) * cell_size;
-                        let cell_rect = Rect::from_min_size(cell_pos.to_pos2(), cell_size);
+                        let cell_rect = Rect::from_min_size(cell_pos, cell_size);
 
                         match field.show {
                             ShowState::Hide => {
@@ -368,7 +428,7 @@ impl App for MinesweeperApp {
                                             ];
                                             let num_color = COLORS[c as usize - 1];
                                             painter.text(
-                                                cell_center_pos.to_pos2(),
+                                                cell_center_pos,
                                                 Align2::CENTER_CENTER,
                                                 c,
                                                 text_style,
@@ -384,9 +444,9 @@ impl App for MinesweeperApp {
                                         };
                                         painter.rect(cell_rect, 0.0, color, cell_stroke);
                                         painter.text(
-                                            cell_center_pos.to_pos2(),
+                                            cell_center_pos,
                                             Align2::CENTER_CENTER,
-                                            "#",
+                                            "*",
                                             text_style,
                                             Color32::BLACK,
                                         );
@@ -400,7 +460,7 @@ impl App for MinesweeperApp {
                 // cursor
                 let cursor_pos = board_offset
                     + Vec2::new(self.cursor_x as f32, self.cursor_y as f32) * cell_size;
-                let cursor_rect = Rect::from_min_size(cursor_pos.to_pos2(), cell_size);
+                let cursor_rect = Rect::from_min_size(cursor_pos, cell_size);
                 painter.rect(
                     cursor_rect,
                     0.0,
@@ -409,6 +469,13 @@ impl App for MinesweeperApp {
                 );
             });
     }
+}
+
+fn format_duration(duration: Duration) -> String {
+    let total_secs = duration.as_secs();
+    let secs = total_secs % 60;
+    let mins = total_secs / 60;
+    format!("{mins:2}:{secs:02}")
 }
 
 fn main() {
