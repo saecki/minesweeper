@@ -3,7 +3,10 @@
 use std::time::{Duration, Instant};
 
 use eframe::{App, CreationContext, NativeOptions};
-use egui::{Align, Align2, Button, CentralPanel, Color32, FontId, Frame, Key, Layout, Pos2, Rect, RichText, Stroke, TextStyle, Vec2};
+use egui::{
+    Align, Align2, Button, CentralPanel, Color32, FontId, Frame, Key, Layout, Pos2, Rect, RichText,
+    Stroke, TextStyle, Vec2,
+};
 use rand::Rng;
 
 const GAME_WIDTH: i16 = 20;
@@ -90,6 +93,7 @@ impl Game {
             return;
         }
 
+        let first = self.first;
         loop {
             let field = &mut self[(x, y)];
             if field.show == ShowState::Hint {
@@ -98,6 +102,12 @@ impl Game {
 
             match field.state {
                 FieldState::Free(neighbours) => {
+                    if first && neighbours != 0 {
+                        self.clear_board();
+                        self.gen_board();
+                        continue;
+                    }
+
                     if let ShowState::Show = field.show {
                         let num_hinted_mines = self.count_hinted_mine((x - 1, y - 1))
                             + self.count_hinted_mine((x - 1, y + 0))
@@ -120,24 +130,27 @@ impl Game {
                         }
                     }
 
-
                     self.show_neighbors((x, y));
                     self.check_if_won();
                     break;
                 }
                 FieldState::Mine => {
-                    if !self.first {
-                        self.lose();
-                        break;
-                    } else {
+                    if first {
                         self.clear_board();
                         self.gen_board();
+                        continue;
                     }
+
+                    self.lose();
+                    break;
                 }
             }
         }
 
-        self.first = false;
+        if self.first {
+            self.start_time = Instant::now();
+            self.first = false;
+        }
     }
 
     fn hint(&mut self, (x, y): (i16, i16)) {
@@ -228,7 +241,7 @@ impl Game {
             return 0;
         }
 
-        if self[(x, y )].show == ShowState::Hint {
+        if self[(x, y)].show == ShowState::Hint {
             return 1;
         }
 
@@ -356,19 +369,29 @@ impl App for MinesweeperApp {
                 let ratio = available_size / cells;
                 let cell_size = Vec2::splat(ratio.min_elem());
                 let board_size = cells * cell_size;
-                let board_offset = Pos2::new(0.0, menu_bar_height) + (available_size - board_size) * 0.5;
+                let board_offset =
+                    Pos2::new(0.0, menu_bar_height) + (available_size - board_size) * 0.5;
                 let board_rect = Rect::from_min_size(board_offset, board_size);
                 ui.allocate_ui(Vec2::new(ui.available_width(), menu_bar_height), |ui| {
                     ui.horizontal(|ui| {
                         ui.add_space(board_offset.x);
-                        let open_mine_count = self.game.open_mine_count().to_string();
+                        let open_mine_count = if self.game.first {
+                            "?".to_string()
+                        } else {
+                            self.game.open_mine_count().to_string()
+                        };
                         let text = RichText::new(open_mine_count).font(FontId::monospace(30.0));
                         ui.label(text);
 
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             ui.add_space(board_offset.x);
-                            let play_duration = format_duration(self.game.play_duration());
-                            let text = RichText::new(play_duration).font(FontId::monospace(30.0));
+                            let play_duration = if self.game.first {
+                                Duration::ZERO
+                            } else {
+                                self.game.play_duration()
+                            };
+                            let text = RichText::new(format_duration(play_duration))
+                                .font(FontId::monospace(30.0));
                             ui.label(text);
 
                             ui.add_space(20.0);
@@ -492,7 +515,6 @@ impl App for MinesweeperApp {
                                             cell_stroke,
                                         );
 
-
                                         if c != 0 {
                                             const COLORS: [Color32; 8] = [
                                                 Color32::BLUE,
@@ -517,8 +539,12 @@ impl App for MinesweeperApp {
                                     FieldState::Mine => {
                                         let color = match self.game.play_state {
                                             PlayState::Won(_) => Color32::from_gray(0x80),
-                                            PlayState::Lost(_) => Color32::from_rgb(0xd0, 0x60, 0x30),
-                                            PlayState::Playing => unreachable!("can't show a mine if still playing"),
+                                            PlayState::Lost(_) => {
+                                                Color32::from_rgb(0xd0, 0x60, 0x30)
+                                            }
+                                            PlayState::Playing => {
+                                                unreachable!("can't show a mine if still playing")
+                                            }
                                         };
                                         painter.rect(cell_rect, 0.0, color, cell_stroke);
                                         painter.text(
