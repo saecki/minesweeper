@@ -11,7 +11,7 @@ use rand::Rng;
 
 const GAME_WIDTH: i16 = 20;
 const GAME_HEIGHT: i16 = 14;
-const MINE_PROBABILITY: f64 = 0.15;
+const MINE_PROBABILITY_RANGE: std::ops::Range<f64> = 0.11..0.21;
 
 struct MinesweeperApp {
     game: Game,
@@ -20,7 +20,7 @@ struct MinesweeperApp {
 }
 
 struct Game {
-    probability: f64,
+    probability_range: std::ops::Range<f64>,
     play_state: PlayState,
     width: i16,
     height: i16,
@@ -36,10 +36,10 @@ enum PlayState {
 }
 
 impl Game {
-    fn new(width: i16, height: i16, probability: f64) -> Self {
+    fn new(width: i16, height: i16, probability_range: std::ops::Range<f64>) -> Self {
         let len = (width * height) as usize;
         let mut game = Self {
-            probability,
+            probability_range,
             play_state: PlayState::Init,
             width,
             height,
@@ -59,21 +59,39 @@ impl Game {
 
     fn gen_board(&mut self) {
         let mut rng = rand::thread_rng();
-        for y in 0..self.height {
-            for x in 0..self.width {
-                if rng.gen_bool(self.probability) {
-                    self[(x, y)] = Field::mine();
+        let mut available_indices = self.fields.len() - 1;
 
-                    self.increment_field((x - 1, y - 1));
-                    self.increment_field((x - 1, y + 0));
-                    self.increment_field((x - 1, y + 1));
-                    self.increment_field((x + 0, y - 1));
-                    self.increment_field((x + 0, y + 1));
-                    self.increment_field((x + 1, y - 1));
-                    self.increment_field((x + 1, y + 0));
-                    self.increment_field((x + 1, y + 1));
+        let min = (self.probability_range.start * available_indices as f64) as u32;
+        let max = (self.probability_range.end * available_indices as f64) as u32;
+        let num_mines = rng.gen_range(min..max);
+        for i in 0..num_mines {
+            let mut available_idx = rng.gen_range(0..available_indices);
+            let mut actual_index: u32 = 0;
+            for f in self.fields.iter_mut() {
+                if f.state != FieldState::Mine {
+                    if available_idx == 0 {
+                        f.state = FieldState::Mine;
+
+                        let x = (actual_index % self.width as u32) as i16;
+                        let y = (actual_index / self.width as u32) as i16;
+
+                        self.increment_field((x - 1, y - 1));
+                        self.increment_field((x - 1, y + 0));
+                        self.increment_field((x - 1, y + 1));
+                        self.increment_field((x + 0, y - 1));
+                        self.increment_field((x + 0, y + 1));
+                        self.increment_field((x + 1, y - 1));
+                        self.increment_field((x + 1, y + 0));
+                        self.increment_field((x + 1, y + 1));
+                        break;
+                    }
+                    available_idx -= 1;
                 }
+
+                actual_index += 1;
             }
+
+            available_indices -= 1;
         }
     }
 
@@ -324,7 +342,7 @@ impl MinesweeperApp {
         Self {
             cursor_x: 0,
             cursor_y: 0,
-            game: Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY),
+            game: Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY_RANGE),
         }
     }
 
@@ -393,7 +411,7 @@ impl App for MinesweeperApp {
                             let text = RichText::new("\u{21bb}").font(FontId::monospace(30.0));
                             let button = Button::new(text).frame(false);
                             if ui.add(button).clicked() {
-                                self.game = Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY);
+                                self.game = Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY_RANGE);
                             }
                         });
                     });
@@ -435,7 +453,7 @@ impl App for MinesweeperApp {
                     }
 
                     if ui.input(|i| i.key_pressed(Key::R)) {
-                        self.game = Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY);
+                        self.game = Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY_RANGE);
                     }
 
                     if let PlayState::Init | PlayState::Playing(_) = self.game.play_state {
@@ -534,7 +552,8 @@ impl App for MinesweeperApp {
                                     FieldState::Mine => {
                                         let color = match self.game.play_state {
                                             PlayState::Init | PlayState::Playing(_) => {
-                                                unreachable!("can't show a mine if still playing")
+                                                // unreachable: can't show a mine if still playing
+                                                Color32::GREEN
                                             }
                                             PlayState::Won(_) => Color32::from_gray(0x80),
                                             PlayState::Lost(_) => {
