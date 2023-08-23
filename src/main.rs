@@ -27,8 +27,8 @@ struct Game {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PlayState {
     Playing,
-    Won,
-    Lost,
+    Won(Duration),
+    Lost(Duration),
 }
 
 impl Game {
@@ -121,7 +121,8 @@ impl Game {
     }
 
     fn lose(&mut self) {
-        self.play_state = PlayState::Lost;
+        let duration = Instant::now() - self.start_time;
+        self.play_state = PlayState::Lost(duration);
         self.show_all();
     }
 
@@ -134,7 +135,8 @@ impl Game {
             }
         }
 
-        self.play_state = PlayState::Won;
+        let duration = Instant::now() - self.start_time;
+        self.play_state = PlayState::Won(duration);
         self.show_all();
     }
 
@@ -185,7 +187,11 @@ impl Game {
     }
 
     fn play_duration(&self) -> Duration {
-        Instant::now() - self.start_time
+        match self.play_state {
+            PlayState::Playing => Instant::now() - self.start_time,
+            PlayState::Won(duration) => duration,
+            PlayState::Lost(duration) => duration,
+        }
     }
 }
 
@@ -438,8 +444,8 @@ impl App for MinesweeperApp {
                                     }
                                     FieldState::Mine => {
                                         let color = match self.game.play_state {
-                                            PlayState::Won => Color32::from_gray(0x80),
-                                            PlayState::Lost => Color32::from_rgb(0xd0, 0x60, 0x30),
+                                            PlayState::Won(_) => Color32::from_gray(0x80),
+                                            PlayState::Lost(_) => Color32::from_rgb(0xd0, 0x60, 0x30),
                                             PlayState::Playing => unreachable!("can't show a mine if still playing"),
                                         };
                                         painter.rect(cell_rect, 0.0, color, cell_stroke);
