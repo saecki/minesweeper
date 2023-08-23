@@ -20,18 +20,17 @@ struct MinesweeperApp {
 }
 
 struct Game {
-    first: bool,
     probability: f64,
     play_state: PlayState,
     width: i16,
     height: i16,
     fields: Vec<Field>,
-    start_time: Instant,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PlayState {
-    Playing,
+    Init,
+    Playing(Instant),
     Won(Duration),
     Lost(Duration),
 }
@@ -40,13 +39,11 @@ impl Game {
     fn new(width: i16, height: i16, probability: f64) -> Self {
         let len = (width * height) as usize;
         let mut game = Self {
-            first: true,
             probability,
-            play_state: PlayState::Playing,
+            play_state: PlayState::Init,
             width,
             height,
             fields: vec![Field::free(0); len],
-            start_time: Instant::now(),
         };
 
         game.gen_board();
@@ -93,7 +90,7 @@ impl Game {
             return;
         }
 
-        let first = self.first;
+        let first = self.play_state == PlayState::Init;
         loop {
             let field = &mut self[(x, y)];
             if field.show == ShowState::Hint {
@@ -147,9 +144,8 @@ impl Game {
             }
         }
 
-        if self.first {
-            self.start_time = Instant::now();
-            self.first = false;
+        if first {
+            self.play_state = PlayState::Playing(Instant::now());
         }
     }
 
@@ -167,7 +163,8 @@ impl Game {
     }
 
     fn lose(&mut self) {
-        let duration = Instant::now() - self.start_time;
+        let PlayState::Playing(start) = self.play_state else { return };
+        let duration = Instant::now() - start;
         self.play_state = PlayState::Lost(duration);
         for f in self.fields.iter_mut() {
             if let FieldState::Mine = f.state {
@@ -185,7 +182,8 @@ impl Game {
             }
         }
 
-        let duration = Instant::now() - self.start_time;
+        let PlayState::Playing(start) = self.play_state else { return };
+        let duration = Instant::now() - start;
         self.play_state = PlayState::Won(duration);
         for f in self.fields.iter_mut() {
             f.show = ShowState::Show;
@@ -264,7 +262,8 @@ impl Game {
 
     fn play_duration(&self) -> Duration {
         match self.play_state {
-            PlayState::Playing => Instant::now() - self.start_time,
+            PlayState::Init => Duration::ZERO,
+            PlayState::Playing(start) => Instant::now() - start,
             PlayState::Won(duration) => duration,
             PlayState::Lost(duration) => duration,
         }
@@ -375,23 +374,19 @@ impl App for MinesweeperApp {
                 ui.allocate_ui(Vec2::new(ui.available_width(), menu_bar_height), |ui| {
                     ui.horizontal(|ui| {
                         ui.add_space(board_offset.x);
-                        let open_mine_count = if self.game.first {
-                            "?".to_string()
-                        } else {
-                            self.game.open_mine_count().to_string()
+                        let open_mine_count = match self.game.play_state {
+                            PlayState::Init => "?".to_string(),
+                            PlayState::Playing(_) | PlayState::Won(_) | PlayState::Lost(_) => {
+                                self.game.open_mine_count().to_string()
+                            }
                         };
                         let text = RichText::new(open_mine_count).font(FontId::monospace(30.0));
                         ui.label(text);
 
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             ui.add_space(board_offset.x);
-                            let play_duration = if self.game.first {
-                                Duration::ZERO
-                            } else {
-                                self.game.play_duration()
-                            };
-                            let text = RichText::new(format_duration(play_duration))
-                                .font(FontId::monospace(30.0));
+                            let play_duration = format_duration(self.game.play_duration());
+                            let text = RichText::new(play_duration).font(FontId::monospace(30.0));
                             ui.label(text);
 
                             ui.add_space(20.0);
@@ -443,7 +438,7 @@ impl App for MinesweeperApp {
                         self.game = Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY);
                     }
 
-                    if self.game.play_state == PlayState::Playing {
+                    if let PlayState::Init | PlayState::Playing(_) = self.game.play_state {
                         // sweep
                         if i.key_pressed(Key::Enter) || i.key_pressed(Key::Space) {
                             if i.modifiers.ctrl {
@@ -538,12 +533,12 @@ impl App for MinesweeperApp {
                                     }
                                     FieldState::Mine => {
                                         let color = match self.game.play_state {
+                                            PlayState::Init | PlayState::Playing(_) => {
+                                                unreachable!("can't show a mine if still playing")
+                                            }
                                             PlayState::Won(_) => Color32::from_gray(0x80),
                                             PlayState::Lost(_) => {
                                                 Color32::from_rgb(0xd0, 0x60, 0x30)
-                                            }
-                                            PlayState::Playing => {
-                                                unreachable!("can't show a mine if still playing")
                                             }
                                         };
                                         painter.rect(cell_rect, 0.0, color, cell_stroke);
