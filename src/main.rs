@@ -11,7 +11,7 @@ use rand::Rng;
 
 const GAME_WIDTH: i16 = 20;
 const GAME_HEIGHT: i16 = 14;
-const MINE_PROBABILITY_RANGE: std::ops::Range<f64> = 0.11..0.21;
+const MINE_PROBABILITY_RANGE: std::ops::Range<f64> = 0.15..0.18;
 
 struct MinesweeperApp {
     game: Game,
