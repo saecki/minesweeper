@@ -1,31 +1,57 @@
+use std::fmt::Display;
 use std::time::{Duration, Instant};
 
 use egui::{
-    Align, Align2, Button, Color32, FontId, Key, Layout, Pos2, Rect, RichText, Stroke, TextStyle,
-    Ui, Vec2,
+    Align, Align2, Button, Color32, ComboBox, FontId, Key, Layout, PointerButton, Pos2, Rect,
+    RichText, Sense, Stroke, TextStyle, Ui, Vec2,
 };
 use rand::Rng;
 
-const GAME_WIDTH: i16 = 20;
-const GAME_HEIGHT: i16 = 14;
-const MINE_PROBABILITY_RANGE: std::ops::Range<f64> = 0.15..0.18;
+const EASY_SETTINGS: GameSettings = GameSettings {
+    width: 20,
+    height: 14,
+    probability_range: 0.15..0.18,
+};
+const MEDIUM_SETTINGS: GameSettings = GameSettings {
+    width: 30,
+    height: 18,
+    probability_range: 0.17..0.20,
+};
+const HARD_SETTINGS: GameSettings = GameSettings {
+    width: 40,
+    height: 24,
+    probability_range: 0.19..0.22,
+};
 
 pub struct Minesweeper {
     game: Game,
+    cursor_visible: bool,
     cursor_x: i16,
     cursor_y: i16,
+    difficulty: Difficulty,
 }
 
 impl Minesweeper {
     pub fn new() -> Self {
         Self {
-            game: Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY_RANGE),
+            game: Game::easy(),
+            cursor_visible: false,
             cursor_x: 0,
             cursor_y: 0,
+            difficulty: Difficulty::Easy,
         }
     }
 
+    fn new_game(&mut self) {
+        self.game = match self.difficulty {
+            Difficulty::Easy => Game::easy(),
+            Difficulty::Medium => Game::medium(),
+            Difficulty::Hard => Game::hard(),
+        };
+    }
+
     fn cursor_left(&mut self) {
+        self.cursor_visible = true;
         self.cursor_x -= 1;
         if self.cursor_x < 0 {
             self.cursor_x = self.game.width - 1;
@@ -33,6 +59,7 @@ impl Minesweeper {
     }
 
     fn cursor_right(&mut self) {
+        self.cursor_visible = true;
         self.cursor_x += 1;
         if self.cursor_x >= self.game.width {
             self.cursor_x = 0
@@ -40,6 +67,7 @@ impl Minesweeper {
     }
 
     fn cursor_up(&mut self) {
+        self.cursor_visible = true;
         self.cursor_y -= 1;
         if self.cursor_y < 0 {
             self.cursor_y = self.game.height - 1;
@@ -47,11 +75,35 @@ impl Minesweeper {
     }
 
     fn cursor_down(&mut self) {
+        self.cursor_visible = true;
         self.cursor_y += 1;
         if self.cursor_y >= self.game.height {
             self.cursor_y = 0
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Difficulty {
+    Easy,
+    Medium,
+    Hard,
+}
+
+impl Display for Difficulty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Difficulty::Easy => write!(f, "Easy"),
+            Difficulty::Medium => write!(f, "Medium"),
+            Difficulty::Hard => write!(f, "Hard"),
+        }
+    }
+}
+
+struct GameSettings {
+    width: i16,
+    height: i16,
+    probability_range: std::ops::Range<f64>,
 }
 
 struct Game {
@@ -71,13 +123,25 @@ enum PlayState {
 }
 
 impl Game {
-    fn new(width: i16, height: i16, probability_range: std::ops::Range<f64>) -> Self {
-        let len = (width * height) as usize;
+    fn easy() -> Self {
+        Self::new(EASY_SETTINGS)
+    }
+
+    fn medium() -> Self {
+        Self::new(MEDIUM_SETTINGS)
+    }
+
+    fn hard() -> Self {
+        Self::new(HARD_SETTINGS)
+    }
+
+    fn new(settings: GameSettings) -> Self {
+        let len = (settings.width * settings.height) as usize;
         let mut game = Self {
-            probability_range,
+            probability_range: settings.probability_range,
             play_state: PlayState::Init,
-            width,
-            height,
+            width: settings.width,
+            height: settings.height,
             fields: vec![Field::free(0); len],
         };
 
@@ -109,14 +173,14 @@ impl Game {
                         let x = (actual_index % self.width as usize) as i16;
                         let y = (actual_index / self.width as usize) as i16;
 
-                        self.increment_field((x - 1, y - 1));
-                        self.increment_field((x - 1, y + 0));
-                        self.increment_field((x - 1, y + 1));
-                        self.increment_field((x + 0, y - 1));
-                        self.increment_field((x + 0, y + 1));
-                        self.increment_field((x + 1, y - 1));
-                        self.increment_field((x + 1, y + 0));
-                        self.increment_field((x + 1, y + 1));
+                        self.increment_field(x - 1, y - 1);
+                        self.increment_field(x - 1, y + 0);
+                        self.increment_field(x - 1, y + 1);
+                        self.increment_field(x + 0, y - 1);
+                        self.increment_field(x + 0, y + 1);
+                        self.increment_field(x + 1, y - 1);
+                        self.increment_field(x + 1, y + 0);
+                        self.increment_field(x + 1, y + 1);
                         break;
                     }
                     available_idx -= 1;
@@ -127,16 +191,16 @@ impl Game {
         }
     }
 
-    fn increment_field(&mut self, (x, y): (i16, i16)) {
-        if x >= 0 && x < self.width && y >= 0 && y < self.height {
+    fn increment_field(&mut self, x: i16, y: i16) {
+        if self.is_in_bounds(x, y) {
             if let FieldState::Free(neighbors) = &mut self[(x, y)].state {
                 *neighbors += 1;
             }
         }
     }
 
-    fn click(&mut self, (x, y): (i16, i16)) {
-        if x < 0 || x >= self.width || y < 0 || y >= self.height {
+    fn click(&mut self, x: i16, y: i16) {
+        if !self.is_in_bounds(x, y) {
             return;
         }
 
@@ -156,28 +220,28 @@ impl Game {
                     }
 
                     if let ShowState::Show = field.show {
-                        let num_hinted_mines = self.count_hinted_mine((x - 1, y - 1))
-                            + self.count_hinted_mine((x - 1, y + 0))
-                            + self.count_hinted_mine((x - 1, y + 1))
-                            + self.count_hinted_mine((x + 0, y - 1))
-                            + self.count_hinted_mine((x + 0, y + 1))
-                            + self.count_hinted_mine((x + 1, y - 1))
-                            + self.count_hinted_mine((x + 1, y + 0))
-                            + self.count_hinted_mine((x + 1, y + 1));
+                        let num_hinted_mines = self.count_hinted_mine(x - 1, y - 1)
+                            + self.count_hinted_mine(x - 1, y + 0)
+                            + self.count_hinted_mine(x - 1, y + 1)
+                            + self.count_hinted_mine(x + 0, y - 1)
+                            + self.count_hinted_mine(x + 0, y + 1)
+                            + self.count_hinted_mine(x + 1, y - 1)
+                            + self.count_hinted_mine(x + 1, y + 0)
+                            + self.count_hinted_mine(x + 1, y + 1);
 
                         if num_hinted_mines == neighbours {
-                            self.show_if_not_hinted((x - 1, y - 1));
-                            self.show_if_not_hinted((x - 1, y + 0));
-                            self.show_if_not_hinted((x - 1, y + 1));
-                            self.show_if_not_hinted((x + 0, y - 1));
-                            self.show_if_not_hinted((x + 0, y + 1));
-                            self.show_if_not_hinted((x + 1, y - 1));
-                            self.show_if_not_hinted((x + 1, y + 0));
-                            self.show_if_not_hinted((x + 1, y + 1));
+                            self.show_if_not_hinted(x - 1, y - 1);
+                            self.show_if_not_hinted(x - 1, y + 0);
+                            self.show_if_not_hinted(x - 1, y + 1);
+                            self.show_if_not_hinted(x + 0, y - 1);
+                            self.show_if_not_hinted(x + 0, y + 1);
+                            self.show_if_not_hinted(x + 1, y - 1);
+                            self.show_if_not_hinted(x + 1, y + 0);
+                            self.show_if_not_hinted(x + 1, y + 1);
                         }
                     }
 
-                    self.show_neighbors((x, y));
+                    self.show_neighbors(x, y);
                     self.check_if_won();
                     break;
                 }
@@ -188,7 +252,7 @@ impl Game {
                         continue;
                     }
 
-                    self.lose();
+                    self.lose(x, y);
                     break;
                 }
             }
@@ -199,8 +263,8 @@ impl Game {
         }
     }
 
-    fn hint(&mut self, (x, y): (i16, i16)) {
-        if x < 0 || x >= self.width || y < 0 || y >= self.height {
+    fn hint(&mut self, x: i16, y: i16) {
+        if !self.is_in_bounds(x, y) {
             return;
         }
 
@@ -212,15 +276,13 @@ impl Game {
         }
     }
 
-    fn lose(&mut self) {
-        let PlayState::Playing(start) = self.play_state else { return };
+    fn lose(&mut self, x: i16, y: i16) {
+        let PlayState::Playing(start) = self.play_state else {
+            return;
+        };
         let duration = Instant::now() - start;
+        self[(x, y)].show = ShowState::Show;
         self.play_state = PlayState::Lost(duration);
-        for f in self.fields.iter_mut() {
-            if let FieldState::Mine = f.state {
-                f.show = ShowState::Show;
-            }
-        }
     }
 
     fn check_if_won(&mut self) {
@@ -232,7 +294,9 @@ impl Game {
             }
         }
 
-        let PlayState::Playing(start) = self.play_state else { return };
+        let PlayState::Playing(start) = self.play_state else {
+            return;
+        };
         let duration = Instant::now() - start;
         self.play_state = PlayState::Won(duration);
         for f in self.fields.iter_mut() {
@@ -240,8 +304,8 @@ impl Game {
         }
     }
 
-    fn show_if_not_hinted(&mut self, (x, y): (i16, i16)) {
-        if x < 0 || x >= self.width || y < 0 || y >= self.height {
+    fn show_if_not_hinted(&mut self, x: i16, y: i16) {
+        if !self.is_in_bounds(x, y) {
             return;
         }
 
@@ -251,15 +315,15 @@ impl Game {
         }
 
         if let FieldState::Mine = field.state {
-            self.lose();
+            self.lose(x, y);
             return;
         }
 
-        self.show_neighbors((x, y));
+        self.show_neighbors(x, y);
     }
 
-    fn show_neighbors(&mut self, (x, y): (i16, i16)) {
-        if x < 0 || x >= self.width || y < 0 || y >= self.height {
+    fn show_neighbors(&mut self, x: i16, y: i16) {
+        if !self.is_in_bounds(x, y) {
             return;
         }
 
@@ -274,18 +338,18 @@ impl Game {
             return;
         }
 
-        self.show_neighbors((x - 1, y - 1));
-        self.show_neighbors((x - 1, y + 0));
-        self.show_neighbors((x - 1, y + 1));
-        self.show_neighbors((x + 0, y - 1));
-        self.show_neighbors((x + 0, y + 1));
-        self.show_neighbors((x + 1, y - 1));
-        self.show_neighbors((x + 1, y + 0));
-        self.show_neighbors((x + 1, y + 1));
+        self.show_neighbors(x - 1, y - 1);
+        self.show_neighbors(x - 1, y + 0);
+        self.show_neighbors(x - 1, y + 1);
+        self.show_neighbors(x + 0, y - 1);
+        self.show_neighbors(x + 0, y + 1);
+        self.show_neighbors(x + 1, y - 1);
+        self.show_neighbors(x + 1, y + 0);
+        self.show_neighbors(x + 1, y + 1);
     }
 
-    fn count_hinted_mine(&self, (x, y): (i16, i16)) -> u8 {
-        if x < 0 || x >= self.width || y < 0 || y >= self.height {
+    fn count_hinted_mine(&self, x: i16, y: i16) -> u8 {
+        if !self.is_in_bounds(x, y) {
             return 0;
         }
 
@@ -317,6 +381,10 @@ impl Game {
             PlayState::Won(duration) => duration,
             PlayState::Lost(duration) => duration,
         }
+    }
+
+    fn is_in_bounds(&self, x: i16, y: i16) -> bool {
+        x >= 0 && x < self.width && y >= 0 && y < self.height
     }
 }
 
@@ -400,7 +468,30 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                 let text = RichText::new("\u{21bb}").font(FontId::monospace(30.0));
                 let button = Button::new(text).frame(false);
                 if ui.add(button).clicked() {
-                    ms.game = Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY_RANGE);
+                    ms.new_game();
+                }
+
+                ui.add_space(20.0);
+                let text =
+                    RichText::new(ms.difficulty.to_string()).font(FontId::proportional(20.0));
+                let prev_difficulty = ms.difficulty;
+                ComboBox::new("difficulty", "")
+                    .selected_text(text)
+                    .show_ui(ui, |ui| {
+                        let text = RichText::new(Difficulty::Easy.to_string())
+                            .font(FontId::proportional(20.0));
+                        ui.selectable_value(&mut ms.difficulty, Difficulty::Easy, text);
+
+                        let text = RichText::new(Difficulty::Medium.to_string())
+                            .font(FontId::proportional(20.0));
+                        ui.selectable_value(&mut ms.difficulty, Difficulty::Medium, text);
+
+                        let text = RichText::new(Difficulty::Hard.to_string())
+                            .font(FontId::proportional(20.0));
+                        ui.selectable_value(&mut ms.difficulty, Difficulty::Hard, text);
+                    });
+                if ms.difficulty != prev_difficulty && ms.game.play_state == PlayState::Init {
+                    ms.new_game();
                 }
             });
         });
@@ -442,41 +533,50 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
         }
 
         if ui.input(|i| i.key_pressed(Key::R)) {
-            ms.game = Game::new(GAME_WIDTH, GAME_HEIGHT, MINE_PROBABILITY_RANGE);
+            ms.new_game();
         }
 
         if let PlayState::Init | PlayState::Playing(_) = ms.game.play_state {
             // sweep
             if i.key_pressed(Key::Enter) || i.key_pressed(Key::Space) {
                 if i.modifiers.ctrl {
-                    ms.game.hint((ms.cursor_x, ms.cursor_y));
+                    ms.game.hint(ms.cursor_x, ms.cursor_y);
                 } else {
-                    ms.game.click((ms.cursor_x, ms.cursor_y));
-                }
-            }
-
-            let mut clicked = false;
-            let mut hint = false;
-            if i.pointer.primary_clicked() {
-                clicked = true;
-            } else if i.pointer.secondary_clicked() {
-                clicked = true;
-                hint = true;
-            }
-            if clicked {
-                if let Some(pos) = i.pointer.hover_pos() {
-                    let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
-                    let (x, y) = (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16);
-
-                    if hint {
-                        ms.game.hint((x, y));
-                    } else {
-                        ms.game.click((x, y));
-                    }
+                    ms.game.click(ms.cursor_x, ms.cursor_y);
                 }
             }
         }
     });
+
+    let resp = ui.allocate_rect(board_rect, Sense::click_and_drag());
+    if let Some(pos) = resp.hover_pos() {
+        let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
+        let (x, y) = (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16);
+
+        if resp.ctx.input(|i| i.pointer.velocity() != Vec2::ZERO) {
+            if ms.game.is_in_bounds(x, y) {
+                ms.cursor_x = x;
+                ms.cursor_y = y;
+            }
+            ms.cursor_visible = false;
+        }
+
+        let mut clicked = false;
+        let mut hint = false;
+        if resp.clicked() || resp.drag_released_by(PointerButton::Primary) {
+            clicked = true;
+        } else if resp.secondary_clicked() || resp.drag_released_by(PointerButton::Secondary) {
+            clicked = true;
+            hint = true;
+        }
+        if clicked {
+            if hint {
+                ms.game.hint(x, y);
+            } else {
+                ms.game.click(x, y);
+            }
+        }
+    }
 
     // draw
     let painter = ui.painter();
@@ -484,85 +584,162 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
     let cell_stroke = Stroke::new(1.0, bg_color);
     painter.rect(board_rect, 0.0, bg_color, Stroke::NONE);
 
+    const COLOR_HIDE: Color32 = Color32::from_gray(0x40);
+    const COLOR_HINT: Color32 = Color32::from_rgb(0xf0, 0xc0, 0x30);
+    const COLOR_SHOW: Color32 = Color32::from_gray(0x80);
+    const COLOR_LOSE: Color32 = Color32::from_rgb(0xd0, 0x60, 0x30);
+    const NUM_COLORS: [Color32; 8] = [
+        Color32::BLUE,
+        Color32::GREEN,
+        Color32::RED,
+        Color32::DARK_BLUE,
+        Color32::DARK_RED,
+        Color32::LIGHT_BLUE,
+        Color32::BLACK,
+        Color32::GRAY,
+    ];
+
     for y in 0..ms.game.height {
         for x in 0..ms.game.width {
             let field = ms.game[(x, y)];
             let cell_pos = board_offset + Vec2::new(x as f32, y as f32) * cell_size;
             let cell_rect = Rect::from_min_size(cell_pos, cell_size);
+            let cell_center_pos = cell_pos + cell_size / 2.0;
+            let mut text_style = TextStyle::Monospace.resolve(ui.style().as_ref());
+            text_style.size = cell_size.y * 0.8;
 
-            match field.show {
-                ShowState::Hide => {
-                    painter.rect(cell_rect, 0.0, Color32::from_gray(0x40), cell_stroke);
-                }
-                ShowState::Hint => {
-                    painter.rect(
-                        cell_rect,
-                        0.0,
-                        Color32::from_rgb(0xf0, 0xc0, 0x30),
-                        cell_stroke,
-                    );
-                }
-                ShowState::Show => {
-                    let cell_center_pos = cell_pos + cell_size / 2.0;
-                    let mut text_style = TextStyle::Monospace.resolve(ui.style().as_ref());
-                    text_style.size = cell_size.y * 0.8;
-
-                    match field.state {
-                        FieldState::Free(c) => {
-                            painter.rect(cell_rect, 0.0, Color32::from_gray(0x80), cell_stroke);
-
-                            if c != 0 {
-                                const COLORS: [Color32; 8] = [
-                                    Color32::BLUE,
-                                    Color32::GREEN,
-                                    Color32::RED,
-                                    Color32::DARK_BLUE,
-                                    Color32::DARK_RED,
-                                    Color32::LIGHT_BLUE,
-                                    Color32::BLACK,
-                                    Color32::GRAY,
-                                ];
-                                let num_color = COLORS[c as usize - 1];
-                                painter.text(
-                                    cell_center_pos,
-                                    Align2::CENTER_CENTER,
-                                    c,
-                                    text_style,
-                                    num_color,
-                                );
-                            }
-                        }
-                        FieldState::Mine => {
-                            let color = match ms.game.play_state {
-                                PlayState::Init | PlayState::Playing(_) => {
-                                    // unreachable: can't show a mine if still playing
-                                    Color32::GREEN
-                                }
-                                PlayState::Won(_) => Color32::from_gray(0x80),
-                                PlayState::Lost(_) => Color32::from_rgb(0xd0, 0x60, 0x30),
-                            };
-                            painter.rect(cell_rect, 0.0, color, cell_stroke);
+            match ms.game.play_state {
+                PlayState::Init | PlayState::Playing(_) => match (field.state, field.show) {
+                    (_, ShowState::Hide) => {
+                        painter.rect(cell_rect, 0.0, COLOR_HIDE, cell_stroke);
+                    }
+                    (_, ShowState::Hint) => {
+                        painter.rect(cell_rect, 0.0, COLOR_HINT, cell_stroke);
+                    }
+                    (FieldState::Free(n), ShowState::Show) => {
+                        painter.rect(cell_rect, 0.0, COLOR_SHOW, cell_stroke);
+                        if n != 0 {
+                            let num_color = NUM_COLORS[n as usize - 1];
                             painter.text(
                                 cell_center_pos,
                                 Align2::CENTER_CENTER,
-                                "*",
+                                n,
                                 text_style,
-                                Color32::BLACK,
+                                num_color,
                             );
                         }
                     }
-                }
+                    (FieldState::Mine, ShowState::Show) => {
+                        painter.rect(cell_rect, 0.0, Color32::GREEN, cell_stroke);
+                    }
+                },
+                PlayState::Won(_) => match (field.state, field.show) {
+                    (FieldState::Free(n), _) => {
+                        painter.rect(cell_rect, 0.0, COLOR_SHOW, cell_stroke);
+                        if n != 0 {
+                            let num_color = NUM_COLORS[n as usize - 1];
+                            painter.text(
+                                cell_center_pos,
+                                Align2::CENTER_CENTER,
+                                n,
+                                text_style,
+                                num_color,
+                            );
+                        }
+                    }
+                    (FieldState::Mine, ShowState::Hint) => {
+                        painter.rect(cell_rect, 0.0, COLOR_HINT, cell_stroke);
+                        painter.text(
+                            cell_center_pos,
+                            Align2::CENTER_CENTER,
+                            "*",
+                            text_style,
+                            Color32::BLACK,
+                        );
+                    }
+                    (FieldState::Mine, _) => {
+                        painter.rect(cell_rect, 0.0, COLOR_SHOW, cell_stroke);
+                        painter.text(
+                            cell_center_pos,
+                            Align2::CENTER_CENTER,
+                            "*",
+                            text_style,
+                            Color32::BLACK,
+                        );
+                    }
+                },
+                PlayState::Lost(_) => match (field.state, field.show) {
+                    (FieldState::Free(_), ShowState::Hide) => {
+                        painter.rect(cell_rect, 0.0, COLOR_HIDE, cell_stroke);
+                    }
+                    (FieldState::Free(_), ShowState::Hint) => {
+                        painter.rect(cell_rect, 0.0, COLOR_HINT, cell_stroke);
+                        painter.text(
+                            cell_center_pos,
+                            Align2::CENTER_CENTER,
+                            "x",
+                            text_style,
+                            Color32::RED,
+                        );
+                    }
+                    (FieldState::Free(n), ShowState::Show) => {
+                        painter.rect(cell_rect, 0.0, COLOR_SHOW, cell_stroke);
+                        if n != 0 {
+                            let num_color = NUM_COLORS[n as usize - 1];
+                            painter.text(
+                                cell_center_pos,
+                                Align2::CENTER_CENTER,
+                                n,
+                                text_style,
+                                num_color,
+                            );
+                        }
+                    }
+                    (FieldState::Mine, ShowState::Hide) => {
+                        painter.rect(cell_rect, 0.0, COLOR_SHOW, cell_stroke);
+                        painter.text(
+                            cell_center_pos,
+                            Align2::CENTER_CENTER,
+                            "*",
+                            text_style,
+                            Color32::BLACK,
+                        );
+                    }
+                    (FieldState::Mine, ShowState::Hint) => {
+                        painter.rect(cell_rect, 0.0, COLOR_HINT, cell_stroke);
+                        painter.text(
+                            cell_center_pos,
+                            Align2::CENTER_CENTER,
+                            "*",
+                            text_style,
+                            Color32::BLACK,
+                        );
+                    }
+                    (FieldState::Mine, ShowState::Show) => {
+                        painter.rect(cell_rect, 0.0, COLOR_LOSE, cell_stroke);
+                        painter.text(
+                            cell_center_pos,
+                            Align2::CENTER_CENTER,
+                            "*",
+                            text_style,
+                            Color32::BLACK,
+                        );
+                    }
+                },
             }
         }
     }
 
     // cursor
-    let cursor_pos = board_offset + Vec2::new(ms.cursor_x as f32, ms.cursor_y as f32) * cell_size;
-    let cursor_rect = Rect::from_min_size(cursor_pos, cell_size);
-    painter.rect(
-        cursor_rect,
-        0.0,
-        Color32::TRANSPARENT,
-        Stroke::new(2.0, Color32::from_rgb(0xd0, 0xd0, 0xf0)),
-    );
+    if ms.cursor_visible {
+        let cursor_pos =
+            board_offset + Vec2::new(ms.cursor_x as f32, ms.cursor_y as f32) * cell_size;
+        let cursor_rect = Rect::from_min_size(cursor_pos, cell_size);
+        painter.rect(
+            cursor_rect,
+            4.0,
+            Color32::TRANSPARENT,
+            Stroke::new(2.0, Color32::from_rgb(0xc0, 0xc0, 0xf0)),
+        );
+    }
 }
