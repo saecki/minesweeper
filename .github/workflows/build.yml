@@ -8,9 +8,28 @@ on:
   - cron:  '0 0 1 * *' # monthly
 
 jobs:
+  deploy-web-app:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: nightly
+        targets: wasm32-unknown-unknown
+    - uses: jetli/trunk-action@v0.4.0
+    - uses: jetli/wasm-bindgen-action@v0.2.0
+
+    - run: (cd web && trunk build --release --public-url /${{ github.event.repository.name }}/)
+
+    - uses: peaceiris/actions-gh-pages@v3
+      if: github.ref == 'refs/heads/main'
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./web/dist
+
+
   build-linux:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v3
     - uses: dtolnay/rust-toolchain@stable
@@ -39,7 +58,6 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-
     steps:
     - uses: actions/checkout@v3
     - uses: dtolnay/rust-toolchain@stable

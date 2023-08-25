@@ -2,12 +2,13 @@
 members = [
     "minesweeper",
     "app",
+    "web",
 ]
 resolver = "2"
 
 [workspace.dependencies]
-minesweeper = { path = "minesweeper" }
 egui = "0.22.0"
+eframe = "0.22.0"
 
 [profile.release]
 strip = true

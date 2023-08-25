@@ -1,5 +1,6 @@
 use std::fmt::Display;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use instant::Instant;
 
 use egui::{
     Align, Align2, Button, Color32, ComboBox, FontId, Key, Layout, PointerButton, Pos2, Rect,
@@ -537,7 +538,6 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
         }
 
         if let PlayState::Init | PlayState::Playing(_) = ms.game.play_state {
-            // sweep
             if i.key_pressed(Key::Enter) || i.key_pressed(Key::Space) {
                 if i.modifiers.ctrl {
                     ms.game.hint(ms.cursor_x, ms.cursor_y);
@@ -549,31 +549,33 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
     });
 
     let resp = ui.allocate_rect(board_rect, Sense::click_and_drag());
-    if let Some(pos) = resp.hover_pos() {
-        let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
-        let (x, y) = (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16);
+    if let PlayState::Init | PlayState::Playing(_) = ms.game.play_state {
+        if let Some(pos) = resp.hover_pos() {
+            let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
+            let (x, y) = (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16);
 
-        if resp.ctx.input(|i| i.pointer.velocity() != Vec2::ZERO) {
-            if ms.game.is_in_bounds(x, y) {
-                ms.cursor_x = x;
-                ms.cursor_y = y;
+            if resp.ctx.input(|i| i.pointer.velocity() != Vec2::ZERO) {
+                if ms.game.is_in_bounds(x, y) {
+                    ms.cursor_x = x;
+                    ms.cursor_y = y;
+                }
+                ms.cursor_visible = false;
             }
-            ms.cursor_visible = false;
-        }
 
-        let mut clicked = false;
-        let mut hint = false;
-        if resp.clicked() || resp.drag_released_by(PointerButton::Primary) {
-            clicked = true;
-        } else if resp.secondary_clicked() || resp.drag_released_by(PointerButton::Secondary) {
-            clicked = true;
-            hint = true;
-        }
-        if clicked {
-            if hint {
-                ms.game.hint(x, y);
-            } else {
-                ms.game.click(x, y);
+            let mut clicked = false;
+            let mut hint = false;
+            if resp.clicked() || resp.drag_released_by(PointerButton::Primary) {
+                clicked = true;
+            } else if resp.secondary_clicked() || resp.drag_released_by(PointerButton::Secondary) {
+                clicked = true;
+                hint = true;
+            }
+            if clicked {
+                if hint {
+                    ms.game.hint(x, y);
+                } else {
+                    ms.game.click(x, y);
+                }
             }
         }
     }

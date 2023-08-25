@@ -1,14 +1,14 @@
+cargo-features = ["per-package-target"]
+
 [package]
-name = "minesweeper_app"
+name = "minesweeper_web"
 version = "0.1.0"
 edition = "2021"
-
-[[bin]]
-doc = false
-name = "minesweeper"
-path = "src/main.rs"
+forced-target = "wasm32-unknown-unknown"
 
 [dependencies]
 minesweeper = { path = "../minesweeper" }
 egui = { workspace = true }
 eframe = { workspace = true }
+wasm-bindgen-futures = "0.4"
+log = "0.4.20"
