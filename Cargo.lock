@@ -1309,9 +1309,17 @@ dependencies = [
 name = "minesweeper"
 version = "0.1.0"
 dependencies = [
- "eframe",
  "egui",
  "rand",
+]
+
+[[package]]
+name = "minesweeper_app"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui",
+ "minesweeper",
 ]
 
 [[package]]

@@ -1,12 +1,13 @@
-[package]
-name = "minesweeper"
-version = "0.1.0"
-edition = "2021"
+[workspace]
+members = [
+    "minesweeper",
+    "app",
+]
+resolver = "2"
+
+[workspace.dependencies]
+minesweeper = { path = "minesweeper" }
+egui = "0.22.0"
 
 [profile.release]
 strip = true
-
-[dependencies]
-eframe = "0.22.0"
-egui = "0.22.0"
-rand = "0.8.5"

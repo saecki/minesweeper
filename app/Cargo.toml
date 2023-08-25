@@ -1,0 +1,14 @@
+[package]
+name = "minesweeper_app"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+doc = false
+name = "minesweeper"
+path = "src/main.rs"
+
+[dependencies]
+minesweeper = { workspace = true }
+egui = { workspace = true }
+eframe = "0.22.0"
