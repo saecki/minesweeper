@@ -1340,19 +1340,19 @@ function __wbg_get_imports() {
         const ret = wasm.memory;
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper747 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper748 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 183, __wbg_adapter_30);
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper749 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper750 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 183, __wbg_adapter_33);
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper751 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper752 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 183, __wbg_adapter_36);
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper765 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper766 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 193, __wbg_adapter_39);
         return addHeapObject(ret);
     };
@@ -1395,7 +1395,7 @@ async function __wbg_init(input) {
     if (wasm !== undefined) return wasm;
 
     if (typeof input === 'undefined') {
-        input = new URL('minesweeper_web-59854e4cd48099b0_bg.wasm', import.meta.url);
+        input = new URL('minesweeper_web-77dd3a7885d4694e_bg.wasm', import.meta.url);
     }
     const imports = __wbg_get_imports();
 
