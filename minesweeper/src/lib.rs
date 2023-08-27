@@ -53,7 +53,7 @@ impl Minesweeper {
         };
     }
 
-    fn cursor_left(&mut self) {
+    fn cursor_x_neg(&mut self) {
         self.cursor_visible = true;
         self.cursor_x -= 1;
         if self.cursor_x < 0 {
@@ -61,7 +61,7 @@ impl Minesweeper {
         }
     }
 
-    fn cursor_right(&mut self) {
+    fn cursor_x_pos(&mut self) {
         self.cursor_visible = true;
         self.cursor_x += 1;
         if self.cursor_x >= self.game.width {
@@ -69,7 +69,7 @@ impl Minesweeper {
         }
     }
 
-    fn cursor_up(&mut self) {
+    fn cursor_y_neg(&mut self) {
         self.cursor_visible = true;
         self.cursor_y -= 1;
         if self.cursor_y < 0 {
@@ -77,11 +77,43 @@ impl Minesweeper {
         }
     }
 
-    fn cursor_down(&mut self) {
+    fn cursor_y_pos(&mut self) {
         self.cursor_visible = true;
         self.cursor_y += 1;
         if self.cursor_y >= self.game.height {
             self.cursor_y = 0
+        }
+    }
+
+    fn cursor_left(&mut self, flipped: bool) {
+        if flipped {
+            self.cursor_y_pos();
+        } else {
+            self.cursor_x_neg();
+        }
+    }
+
+    fn cursor_right(&mut self, flipped: bool) {
+        if flipped {
+            self.cursor_y_neg();
+        } else {
+            self.cursor_x_pos();
+        }
+    }
+
+    fn cursor_up(&mut self, flipped: bool) {
+        if flipped {
+            self.cursor_x_neg();
+        } else {
+            self.cursor_y_neg();
+        }
+    }
+
+    fn cursor_down(&mut self, flipped: bool) {
+        if flipped {
+            self.cursor_x_pos();
+        } else {
+            self.cursor_y_pos();
         }
     }
 }
@@ -440,9 +472,20 @@ fn format_duration(duration: Duration) -> String {
     format!("{mins:2}:{secs:02}")
 }
 
-fn board_idx_from_screen_pos(board_offset: Pos2, cell_size: Vec2, pos: Pos2) -> (i16, i16) {
+fn board_idx_from_screen_pos(
+    height: i16,
+    board_offset: Pos2,
+    cell_size: Vec2,
+    pos: Pos2,
+    flipped: bool,
+) -> (i16, i16) {
     let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
-    (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16)
+    let (x, y) = (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16);
+    if flipped {
+        (y, height - x - 1)
+    } else {
+        (x, y)
+    }
 }
 
 pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
@@ -450,11 +493,18 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
 
     let menu_bar_height = 40.0;
     let available_size = ui.available_size() - Vec2::new(0.0, menu_bar_height);
-    let cells = Vec2::new(ms.game.width as f32, ms.game.height as f32);
+    let flipped = available_size.x < available_size.y;
+    let cells;
+    if flipped {
+        cells = Vec2::new(ms.game.height as f32, ms.game.width as f32);
+    } else {
+        cells = Vec2::new(ms.game.width as f32, ms.game.height as f32);
+    }
     let ratio = available_size / cells;
     let cell_size = Vec2::splat(ratio.min_elem());
     let board_size = cells * cell_size;
     let board_offset = Pos2::new(0.0, menu_bar_height) + (available_size - board_size) * 0.5;
+
     let board_rect = Rect::from_min_size(board_offset, board_size);
     ui.allocate_ui(Vec2::new(ui.available_width(), menu_bar_height), |ui| {
         ui.horizontal(|ui| {
@@ -511,35 +561,35 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
     ui.input(|i| {
         // arrow keys
         if i.key_pressed(Key::ArrowUp) {
-            ms.cursor_up();
+            ms.cursor_up(flipped);
         } else if i.key_pressed(Key::ArrowRight) {
-            ms.cursor_right();
+            ms.cursor_right(flipped);
         } else if i.key_pressed(Key::ArrowDown) {
-            ms.cursor_down();
+            ms.cursor_down(flipped);
         } else if i.key_pressed(Key::ArrowLeft) {
-            ms.cursor_left();
+            ms.cursor_left(flipped);
         }
 
         // wasd keys
         if i.key_pressed(Key::W) {
-            ms.cursor_up();
+            ms.cursor_up(flipped);
         } else if i.key_pressed(Key::D) {
-            ms.cursor_right();
+            ms.cursor_right(flipped);
         } else if i.key_pressed(Key::S) {
-            ms.cursor_down();
+            ms.cursor_down(flipped);
         } else if i.key_pressed(Key::A) {
-            ms.cursor_left();
+            ms.cursor_left(flipped);
         }
 
         // vim keys
         if i.key_pressed(Key::K) {
-            ms.cursor_up();
+            ms.cursor_up(flipped);
         } else if i.key_pressed(Key::L) {
-            ms.cursor_right();
+            ms.cursor_right(flipped);
         } else if i.key_pressed(Key::J) {
-            ms.cursor_down();
+            ms.cursor_down(flipped);
         } else if i.key_pressed(Key::H) {
-            ms.cursor_left();
+            ms.cursor_left(flipped);
         }
 
         if i.key_pressed(Key::R) {
@@ -572,8 +622,14 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                 if let Some(pos) = i.pointer.press_origin() {
                     if let Some(start_time) = i.pointer.press_start_time() {
                         let duration = i.time - start_time;
-                        if !ms.long_press && duration > 0.8 {
-                            let (x, y) = board_idx_from_screen_pos(board_offset, cell_size, pos);
+                        if !ms.long_press && duration > 0.6 {
+                            let (x, y) = board_idx_from_screen_pos(
+                                ms.game.height,
+                                board_offset,
+                                cell_size,
+                                pos,
+                                flipped,
+                            );
                             ms.game.hint(x, y);
                             ms.long_press = true;
                         }
@@ -591,8 +647,14 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                     hint = true;
                 }
 
-                if clicked && !ms.long_press{
-                    let (x, y) = board_idx_from_screen_pos(board_offset, cell_size, pos);
+                if clicked && !ms.long_press {
+                    let (x, y) = board_idx_from_screen_pos(
+                        ms.game.height,
+                        board_offset,
+                        cell_size,
+                        pos,
+                        flipped,
+                    );
 
                     if hint {
                         ms.game.hint(x, y);
@@ -633,6 +695,12 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
     for y in 0..ms.game.height {
         for x in 0..ms.game.width {
             let field = ms.game[(x, y)];
+
+            let (x, y) = if flipped {
+                (ms.game.height - y - 1, x)
+            } else {
+                (x, y)
+            };
             let cell_pos = board_offset + Vec2::new(x as f32, y as f32) * cell_size;
             let cell_rect = Rect::from_min_size(cell_pos, cell_size);
             let cell_center_pos = cell_pos + cell_size / 2.0;
@@ -763,14 +831,21 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
 
     // cursor
     if ms.cursor_visible {
-        let cursor_pos =
-            board_offset + Vec2::new(ms.cursor_x as f32, ms.cursor_y as f32) * cell_size;
+        let cursor_idx = if flipped {
+            Vec2::new(
+                (ms.game.height - ms.cursor_y - 1) as f32,
+                ms.cursor_x as f32,
+            )
+        } else {
+            Vec2::new(ms.cursor_x as f32, ms.cursor_y as f32)
+        };
+        let cursor_pos = board_offset + cursor_idx * cell_size;
         let cursor_rect = Rect::from_min_size(cursor_pos, cell_size);
         painter.rect(
             cursor_rect,
             4.0,
             Color32::TRANSPARENT,
-            Stroke::new(2.0, Color32::from_rgb(0xc0, 0xc0, 0xf0)),
+            Stroke::new(2.0, Color32::from_rgb(0xd0, 0xe0, 0xff)),
         );
     }
 }
