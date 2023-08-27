@@ -1395,7 +1395,7 @@ async function __wbg_init(input) {
     if (wasm !== undefined) return wasm;
 
     if (typeof input === 'undefined') {
-        input = new URL('minesweeper_web-fb1253a923b0d44e_bg.wasm', import.meta.url);
+        input = new URL('minesweeper_web-3020a22d9919fc3d_bg.wasm', import.meta.url);
     }
     const imports = __wbg_get_imports();
 
