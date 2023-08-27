@@ -550,7 +550,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
 
     let resp = ui.allocate_rect(board_rect, Sense::click_and_drag());
     if let PlayState::Init | PlayState::Playing(_) = ms.game.play_state {
-        if let Some(pos) = resp.hover_pos() {
+        if let Some(pos) = resp.interact_pointer_pos() {
             let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
             let (x, y) = (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16);
 
