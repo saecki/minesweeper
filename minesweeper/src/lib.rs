@@ -1,10 +1,10 @@
+use instant::Instant;
 use std::fmt::Display;
 use std::time::Duration;
-use instant::Instant;
 
 use egui::{
-    Align, Align2, Button, Color32, ComboBox, FontId, Key, Layout, PointerButton, Pos2, Rect,
-    RichText, Sense, Stroke, TextStyle, Ui, Vec2,
+    Align, Align2, Button, Color32, ComboBox, FontId, Key, Layout, Pos2, Rect, RichText, Sense,
+    Stroke, TextStyle, Ui, Vec2,
 };
 use rand::Rng;
 
@@ -26,6 +26,7 @@ const HARD_SETTINGS: GameSettings = GameSettings {
 
 pub struct Minesweeper {
     game: Game,
+    long_press: bool,
     cursor_visible: bool,
     cursor_x: i16,
     cursor_y: i16,
@@ -36,6 +37,7 @@ impl Minesweeper {
     pub fn new() -> Self {
         Self {
             game: Game::easy(),
+            long_press: false,
             cursor_visible: false,
             cursor_x: 0,
             cursor_y: 0,
@@ -438,7 +440,14 @@ fn format_duration(duration: Duration) -> String {
     format!("{mins:2}:{secs:02}")
 }
 
+fn board_idx_from_screen_pos(board_offset: Pos2, cell_size: Vec2, pos: Pos2) -> (i16, i16) {
+    let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
+    (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16)
+}
+
 pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
+    ui.ctx().request_repaint();
+
     let menu_bar_height = 40.0;
     let available_size = ui.available_size() - Vec2::new(0.0, menu_bar_height);
     let cells = Vec2::new(ms.game.width as f32, ms.game.height as f32);
@@ -533,7 +542,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
             ms.cursor_left();
         }
 
-        if ui.input(|i| i.key_pressed(Key::R)) {
+        if i.key_pressed(Key::R) {
             ms.new_game();
         }
 
@@ -550,34 +559,54 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
 
     let resp = ui.allocate_rect(board_rect, Sense::click_and_drag());
     if let PlayState::Init | PlayState::Playing(_) = ms.game.play_state {
-        if let Some(pos) = resp.interact_pointer_pos() {
-            let cell_idx = (pos.to_vec2() - board_offset.to_vec2()) / cell_size;
-            let (x, y) = (cell_idx.x.floor() as i16, cell_idx.y.floor() as i16);
-
-            if resp.ctx.input(|i| i.pointer.velocity() != Vec2::ZERO) {
-                if ms.game.is_in_bounds(x, y) {
-                    ms.cursor_x = x;
-                    ms.cursor_y = y;
-                }
+        ui.input_mut(|i| {
+            if i.pointer.velocity() != Vec2::ZERO {
                 ms.cursor_visible = false;
             }
 
-            let mut clicked = false;
-            let mut hint = false;
-            if resp.clicked() || resp.drag_released_by(PointerButton::Primary) {
-                clicked = true;
-            } else if resp.secondary_clicked() || resp.drag_released_by(PointerButton::Secondary) {
-                clicked = true;
-                hint = true;
+            if i.pointer.any_pressed() {
+                ms.long_press = false;
             }
-            if clicked {
-                if hint {
-                    ms.game.hint(x, y);
-                } else {
-                    ms.game.click(x, y);
+
+            if resp.is_pointer_button_down_on() {
+                if let Some(pos) = i.pointer.press_origin() {
+                    if let Some(start_time) = i.pointer.press_start_time() {
+                        let duration = i.time - start_time;
+                        if !ms.long_press && duration > 0.8 {
+                            let (x, y) = board_idx_from_screen_pos(board_offset, cell_size, pos);
+                            ms.game.hint(x, y);
+                            ms.long_press = true;
+                        }
+                    }
                 }
             }
-        }
+
+            if let Some(pos) = resp.interact_pointer_pos() {
+                let mut clicked = false;
+                let mut hint = false;
+                if i.pointer.primary_released() {
+                    clicked = true;
+                } else if i.pointer.secondary_released() {
+                    clicked = true;
+                    hint = true;
+                }
+
+                if clicked && !ms.long_press{
+                    let (x, y) = board_idx_from_screen_pos(board_offset, cell_size, pos);
+
+                    if hint {
+                        ms.game.hint(x, y);
+                    } else {
+                        ms.game.click(x, y);
+                    }
+
+                    if ms.game.is_in_bounds(x, y) {
+                        ms.cursor_x = x;
+                        ms.cursor_y = y;
+                    }
+                }
+            }
+        });
     }
 
     // draw
