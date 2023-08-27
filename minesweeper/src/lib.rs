@@ -622,7 +622,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                 if let Some(pos) = i.pointer.press_origin() {
                     if let Some(start_time) = i.pointer.press_start_time() {
                         let duration = i.time - start_time;
-                        if !ms.long_press && duration > 0.6 {
+                        if !ms.long_press && duration > 0.4 {
                             let (x, y) = board_idx_from_screen_pos(
                                 ms.game.height,
                                 board_offset,
