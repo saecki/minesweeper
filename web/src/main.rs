@@ -7,10 +7,12 @@ struct MinesweeperApp {
 }
 
 impl MinesweeperApp {
-    fn new(_cc: &CreationContext) -> Self {
-        Self {
-            minesweeper: Minesweeper::new(),
-        }
+    fn new(cc: &CreationContext) -> Self {
+        let minesweeper = cc
+            .storage
+            .and_then(|s| eframe::get_value(s, eframe::APP_KEY))
+            .unwrap_or_default();
+        Self { minesweeper }
     }
 }
 
@@ -20,6 +22,10 @@ impl App for MinesweeperApp {
             .frame(Frame::none())
             .show(ctx, |ui| minesweeper::update(ui, &mut self.minesweeper));
     }
+
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        eframe::set_value(storage, eframe::APP_KEY, &self.minesweeper);
+    }
 }
 
 fn main() {
@@ -27,11 +33,13 @@ fn main() {
 
     let options = WebOptions::default();
     wasm_bindgen_futures::spawn_local(async {
-        let res = eframe::WebRunner::new().start(
-            "minesweeper_canvas_id",
-            options,
-            Box::new(|c| Box::new(MinesweeperApp::new(c))),
-        ).await;
+        let res = eframe::WebRunner::new()
+            .start(
+                "minesweeper_canvas_id",
+                options,
+                Box::new(|c| Box::new(MinesweeperApp::new(c))),
+            )
+            .await;
         if let Err(e) = res {
             println!("error running app: {e:?}");
         }

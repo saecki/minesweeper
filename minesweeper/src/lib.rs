@@ -1,4 +1,5 @@
-use instant::Instant;
+use instant::SystemTime;
+use serde_derive::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
 
@@ -8,22 +9,7 @@ use egui::{
 };
 use rand::Rng;
 
-const EASY_SETTINGS: GameSettings = GameSettings {
-    width: 20,
-    height: 14,
-    probability_range: 0.15..0.18,
-};
-const MEDIUM_SETTINGS: GameSettings = GameSettings {
-    width: 30,
-    height: 18,
-    probability_range: 0.17..0.20,
-};
-const HARD_SETTINGS: GameSettings = GameSettings {
-    width: 40,
-    height: 24,
-    probability_range: 0.19..0.22,
-};
-
+#[derive(Serialize, Deserialize)]
 pub struct Minesweeper {
     game: Game,
     long_press: bool,
@@ -31,6 +17,12 @@ pub struct Minesweeper {
     cursor_x: i16,
     cursor_y: i16,
     difficulty: Difficulty,
+}
+
+impl Default for Minesweeper {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Minesweeper {
@@ -118,7 +110,7 @@ impl Minesweeper {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 enum Difficulty {
     Easy,
     Medium,
@@ -135,12 +127,7 @@ impl Display for Difficulty {
     }
 }
 
-struct GameSettings {
-    width: i16,
-    height: i16,
-    probability_range: std::ops::Range<f64>,
-}
-
+#[derive(Serialize, Deserialize)]
 struct Game {
     probability_range: std::ops::Range<f64>,
     play_state: PlayState,
@@ -149,34 +136,26 @@ struct Game {
     fields: Vec<Field>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PlayState {
-    Init,
-    Playing(Instant),
-    Won(Duration),
-    Lost(Duration),
-}
-
 impl Game {
     fn easy() -> Self {
-        Self::new(EASY_SETTINGS)
+        Self::new(20, 14, 0.15..0.18)
     }
 
     fn medium() -> Self {
-        Self::new(MEDIUM_SETTINGS)
+        Self::new(30, 18, 0.17..0.20)
     }
 
     fn hard() -> Self {
-        Self::new(HARD_SETTINGS)
+        Self::new(40, 24, 0.19..0.22)
     }
 
-    fn new(settings: GameSettings) -> Self {
-        let len = (settings.width * settings.height) as usize;
+    fn new(width: i16, height: i16, probability_range: std::ops::Range<f64>) -> Self {
+        let len = (width * height) as usize;
         let mut game = Self {
-            probability_range: settings.probability_range,
+            probability_range,
             play_state: PlayState::Init,
-            width: settings.width,
-            height: settings.height,
+            width,
+            height,
             fields: vec![Field::free(0); len],
         };
 
@@ -294,7 +273,7 @@ impl Game {
         }
 
         if first {
-            self.play_state = PlayState::Playing(Instant::now());
+            self.play_state = PlayState::Playing(SystemTime::now());
         }
     }
 
@@ -315,7 +294,7 @@ impl Game {
         let PlayState::Playing(start) = self.play_state else {
             return;
         };
-        let duration = Instant::now() - start;
+        let duration = SystemTime::now().duration_since(start).unwrap();
         self[(x, y)].show = ShowState::Show;
         self.play_state = PlayState::Lost(duration);
     }
@@ -332,7 +311,7 @@ impl Game {
         let PlayState::Playing(start) = self.play_state else {
             return;
         };
-        let duration = Instant::now() - start;
+        let duration = SystemTime::now().duration_since(start).unwrap();
         self.play_state = PlayState::Won(duration);
         for f in self.fields.iter_mut() {
             f.show = ShowState::Show;
@@ -412,7 +391,7 @@ impl Game {
     fn play_duration(&self) -> Duration {
         match self.play_state {
             PlayState::Init => Duration::ZERO,
-            PlayState::Playing(start) => Instant::now() - start,
+            PlayState::Playing(start) => SystemTime::now().duration_since(start).unwrap(),
             PlayState::Won(duration) => duration,
             PlayState::Lost(duration) => duration,
         }
@@ -437,7 +416,62 @@ impl std::ops::IndexMut<(i16, i16)> for Game {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum PlayState {
+    Init,
+    Playing(SystemTime),
+    Won(Duration),
+    Lost(Duration),
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename = "PlayState")]
+enum PlayStateSerde {
+    Init,
+    Playing(Duration),
+    Won(Duration),
+    Lost(Duration),
+}
+
+impl serde::Serialize for PlayState {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let p = match self {
+            PlayState::Init => PlayStateSerde::Init,
+            PlayState::Playing(start) => {
+                let duration = SystemTime::now().duration_since(*start).unwrap();
+                PlayStateSerde::Playing(duration)
+            }
+            PlayState::Won(duration) => PlayStateSerde::Won(*duration),
+            PlayState::Lost(duration) => PlayStateSerde::Lost(*duration),
+        };
+
+        p.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for PlayState {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let p = PlayStateSerde::deserialize(deserializer)?;
+        let p = match p {
+            PlayStateSerde::Init => PlayState::Init,
+            PlayStateSerde::Playing(duration) => {
+                let start = SystemTime::now() - duration;
+                PlayState::Playing(start)
+            }
+            PlayStateSerde::Won(duration) => PlayState::Won(duration),
+            PlayStateSerde::Lost(duration) => PlayState::Lost(duration),
+        };
+        Ok(p)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 struct Field {
     show: ShowState,
     state: FieldState,
@@ -452,14 +486,14 @@ impl Field {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum ShowState {
     Hide,
     Hint,
     Show,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum FieldState {
     Free(u8),
     Mine,

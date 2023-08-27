@@ -4,11 +4,11 @@ members = [
     "app",
     "web",
 ]
-resolver = "2"
+resolver = "1"
 
 [workspace.dependencies]
-egui = "0.22.0"
-eframe = "0.22.0"
+egui = { version = "0.22.0", features = ["persistence"] }
+eframe = { version = "0.22.0", features = ["persistence"] }
 
 [profile.release]
 strip = true

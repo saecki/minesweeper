@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 egui = { workspace = true }
 rand = "0.8.5"
+serde = { version = "1.0.188", features = ["serde_derive"] }
+serde_derive = "1.0.188"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 getrandom = "0.2"
