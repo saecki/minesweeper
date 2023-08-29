@@ -214,9 +214,13 @@ function makeMutClosure(arg0, arg1, dtor, f) {
     return real;
 }
 function __wbg_adapter_30(arg0, arg1) {
+    wasm.__wbindgen_export_3(arg0, arg1);
+}
+
+function __wbg_adapter_33(arg0, arg1) {
     try {
         const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-        wasm.__wbindgen_export_3(retptr, arg0, arg1);
+        wasm.__wbindgen_export_4(retptr, arg0, arg1);
         var r0 = getInt32Memory0()[retptr / 4 + 0];
         var r1 = getInt32Memory0()[retptr / 4 + 1];
         if (r1) {
@@ -227,12 +231,8 @@ function __wbg_adapter_30(arg0, arg1) {
     }
 }
 
-function __wbg_adapter_33(arg0, arg1, arg2) {
-    wasm.__wbindgen_export_4(arg0, arg1, addHeapObject(arg2));
-}
-
-function __wbg_adapter_36(arg0, arg1) {
-    wasm.__wbindgen_export_5(arg0, arg1);
+function __wbg_adapter_36(arg0, arg1, arg2) {
+    wasm.__wbindgen_export_5(arg0, arg1, addHeapObject(arg2));
 }
 
 function __wbg_adapter_39(arg0, arg1, arg2) {
@@ -1395,7 +1395,7 @@ async function __wbg_init(input) {
     if (wasm !== undefined) return wasm;
 
     if (typeof input === 'undefined') {
-        input = new URL('minesweeper_web-f6d704c1c2390edf_bg.wasm', import.meta.url);
+        input = new URL('minesweeper_web-b3fec9c1fed546c3_bg.wasm', import.meta.url);
     }
     const imports = __wbg_get_imports();
 
