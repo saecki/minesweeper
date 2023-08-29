@@ -1,6 +1,6 @@
 #![windows_subsystem = "windows"]
 
-use eframe::{App, CreationContext, NativeOptions};
+use eframe::{App, CreationContext, NativeOptions, Theme};
 use egui::{CentralPanel, Frame};
 use minesweeper::Minesweeper;
 
@@ -22,7 +22,7 @@ impl MinesweeperApp {
 impl App for MinesweeperApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         CentralPanel::default()
-            .frame(Frame::none())
+            .frame(Frame::none().fill(ctx.style().visuals.window_fill))
             .show(ctx, |ui| minesweeper::update(ui, &mut self.minesweeper));
     }
 
@@ -34,7 +34,8 @@ impl App for MinesweeperApp {
 fn main() {
     let options = NativeOptions {
         drag_and_drop_support: true,
-        follow_system_theme: true,
+        follow_system_theme: false,
+        default_theme: Theme::Light,
         ..Default::default()
     };
     let res = eframe::run_native(

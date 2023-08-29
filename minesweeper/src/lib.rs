@@ -707,15 +707,42 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
 
     // draw
     let painter = ui.painter();
-    let bg_color = Color32::BLACK;
+    let dark_mode = ui.visuals().dark_mode;
+    let bg_color = if dark_mode {
+        Color32::BLACK
+    } else {
+        Color32::WHITE
+    };
     let cell_stroke = Stroke::new(1.0, bg_color);
     painter.rect(board_rect, 0.0, bg_color, Stroke::NONE);
 
-    const COLOR_HIDE: Color32 = Color32::from_gray(0x40);
-    const COLOR_HINT: Color32 = Color32::from_rgb(0xf0, 0xc0, 0x30);
-    const COLOR_SHOW: Color32 = Color32::from_gray(0x80);
-    const COLOR_LOSE: Color32 = Color32::from_rgb(0xd0, 0x60, 0x30);
-    const NUM_COLORS: [Color32; 8] = [
+    let color_cursor = if dark_mode {
+        Color32::from_rgb(0xd0, 0xe0, 0xff)
+    } else {
+        Color32::from_rgb(0x20, 0x40, 0x70)
+    };
+
+    let color_hide = if dark_mode {
+        Color32::from_gray(0x40)
+    } else {
+        Color32::from_gray(0xa0)
+    };
+    let color_hint = if dark_mode {
+        Color32::from_rgb(0xf0, 0xc0, 0x30)
+    } else {
+        Color32::from_rgb(0xf0, 0xc0, 0x30)
+    };
+    let color_show = if dark_mode {
+        Color32::from_gray(0x80)
+    } else {
+        Color32::from_gray(0xc0)
+    };
+    let color_lose = if dark_mode {
+        Color32::from_rgb(0xd0, 0x60, 0x30)
+    } else {
+        Color32::from_rgb(0xd0, 0x60, 0x30)
+    };
+    let colors_nums: [Color32; 8] = [
         Color32::BLUE,
         Color32::GREEN,
         Color32::RED,
@@ -744,15 +771,15 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
             match ms.game.play_state {
                 PlayState::Init | PlayState::Playing(_) => match (field.state, field.show) {
                     (_, ShowState::Hide) => {
-                        painter.rect(cell_rect, 0.0, COLOR_HIDE, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_hide, cell_stroke);
                     }
                     (_, ShowState::Hint) => {
-                        painter.rect(cell_rect, 0.0, COLOR_HINT, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_hint, cell_stroke);
                     }
                     (FieldState::Free(n), ShowState::Show) => {
-                        painter.rect(cell_rect, 0.0, COLOR_SHOW, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_show, cell_stroke);
                         if n != 0 {
-                            let num_color = NUM_COLORS[n as usize - 1];
+                            let num_color = colors_nums[n as usize - 1];
                             painter.text(
                                 cell_center_pos,
                                 Align2::CENTER_CENTER,
@@ -763,14 +790,15 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                         }
                     }
                     (FieldState::Mine, ShowState::Show) => {
+                        // Just for debugging
                         painter.rect(cell_rect, 0.0, Color32::GREEN, cell_stroke);
                     }
                 },
                 PlayState::Won(_) => match (field.state, field.show) {
                     (FieldState::Free(n), _) => {
-                        painter.rect(cell_rect, 0.0, COLOR_SHOW, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_show, cell_stroke);
                         if n != 0 {
-                            let num_color = NUM_COLORS[n as usize - 1];
+                            let num_color = colors_nums[n as usize - 1];
                             painter.text(
                                 cell_center_pos,
                                 Align2::CENTER_CENTER,
@@ -781,7 +809,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                         }
                     }
                     (FieldState::Mine, ShowState::Hint) => {
-                        painter.rect(cell_rect, 0.0, COLOR_HINT, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_hint, cell_stroke);
                         painter.text(
                             cell_center_pos,
                             Align2::CENTER_CENTER,
@@ -791,7 +819,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                         );
                     }
                     (FieldState::Mine, _) => {
-                        painter.rect(cell_rect, 0.0, COLOR_SHOW, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_show, cell_stroke);
                         painter.text(
                             cell_center_pos,
                             Align2::CENTER_CENTER,
@@ -803,10 +831,10 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                 },
                 PlayState::Lost(_) => match (field.state, field.show) {
                     (FieldState::Free(_), ShowState::Hide) => {
-                        painter.rect(cell_rect, 0.0, COLOR_HIDE, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_hide, cell_stroke);
                     }
                     (FieldState::Free(_), ShowState::Hint) => {
-                        painter.rect(cell_rect, 0.0, COLOR_HINT, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_hint, cell_stroke);
                         painter.text(
                             cell_center_pos,
                             Align2::CENTER_CENTER,
@@ -816,9 +844,9 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                         );
                     }
                     (FieldState::Free(n), ShowState::Show) => {
-                        painter.rect(cell_rect, 0.0, COLOR_SHOW, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_show, cell_stroke);
                         if n != 0 {
-                            let num_color = NUM_COLORS[n as usize - 1];
+                            let num_color = colors_nums[n as usize - 1];
                             painter.text(
                                 cell_center_pos,
                                 Align2::CENTER_CENTER,
@@ -829,7 +857,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                         }
                     }
                     (FieldState::Mine, ShowState::Hide) => {
-                        painter.rect(cell_rect, 0.0, COLOR_SHOW, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_show, cell_stroke);
                         painter.text(
                             cell_center_pos,
                             Align2::CENTER_CENTER,
@@ -839,7 +867,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                         );
                     }
                     (FieldState::Mine, ShowState::Hint) => {
-                        painter.rect(cell_rect, 0.0, COLOR_HINT, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_hint, cell_stroke);
                         painter.text(
                             cell_center_pos,
                             Align2::CENTER_CENTER,
@@ -849,7 +877,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                         );
                     }
                     (FieldState::Mine, ShowState::Show) => {
-                        painter.rect(cell_rect, 0.0, COLOR_LOSE, cell_stroke);
+                        painter.rect(cell_rect, 0.0, color_lose, cell_stroke);
                         painter.text(
                             cell_center_pos,
                             Align2::CENTER_CENTER,
@@ -879,7 +907,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
             cursor_rect,
             4.0,
             Color32::TRANSPARENT,
-            Stroke::new(2.0, Color32::from_rgb(0xd0, 0xe0, 0xff)),
+            Stroke::new(2.0, color_cursor),
         );
     }
 }
