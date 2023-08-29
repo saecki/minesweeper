@@ -108,6 +108,20 @@ impl Minesweeper {
             self.cursor_y_pos();
         }
     }
+
+    fn click(&mut self, frame: &mut eframe::Frame, x: i16, y: i16) {
+        self.game.click_(x, y);
+        if let Some(storage) = frame.storage_mut() {
+            eframe::set_value(storage, eframe::APP_KEY, self);
+        }
+    }
+
+    fn hint(&mut self, frame: &mut eframe::Frame, x: i16, y: i16) {
+        self.game.hint_(x, y);
+        if let Some(storage) = frame.storage_mut() {
+            eframe::set_value(storage, eframe::APP_KEY, self);
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -213,7 +227,7 @@ impl Game {
         }
     }
 
-    fn click(&mut self, x: i16, y: i16) {
+    fn click_(&mut self, x: i16, y: i16) {
         if !self.is_in_bounds(x, y) {
             return;
         }
@@ -277,7 +291,7 @@ impl Game {
         }
     }
 
-    fn hint(&mut self, x: i16, y: i16) {
+    fn hint_(&mut self, x: i16, y: i16) {
         if !self.is_in_bounds(x, y) {
             return;
         }
@@ -538,7 +552,7 @@ fn vibrate(ms: u32) {
     }
 }
 
-pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
+pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
     ui.ctx().request_repaint();
 
     let menu_bar_height = 40.0;
@@ -668,9 +682,9 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
         if let PlayState::Init | PlayState::Playing(_) = ms.game.play_state {
             if i.key_pressed(Key::Enter) || i.key_pressed(Key::Space) {
                 if i.modifiers.ctrl {
-                    ms.game.hint(ms.cursor_x, ms.cursor_y);
+                    ms.hint(frame, ms.cursor_x, ms.cursor_y);
                 } else {
-                    ms.game.click(ms.cursor_x, ms.cursor_y);
+                    ms.click(frame, ms.cursor_x, ms.cursor_y);
                 }
             }
         }
@@ -700,7 +714,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                                 flipped,
                             );
                             vibrate(100);
-                            ms.game.hint(x, y);
+                            ms.hint(frame, x, y);
                             ms.long_press = true;
                         }
                     }
@@ -727,9 +741,9 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                     );
 
                     if hint {
-                        ms.game.hint(x, y);
+                        ms.hint(frame, x, y);
                     } else {
-                        ms.game.click(x, y);
+                        ms.click(frame, x, y);
                     }
 
                     if ms.game.is_in_bounds(x, y) {
