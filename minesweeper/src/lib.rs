@@ -735,11 +735,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
     // draw
     let painter = ui.painter();
     let dark_mode = ui.visuals().dark_mode;
-    let bg_color = if dark_mode {
-        Color32::BLACK
-    } else {
-        Color32::WHITE
-    };
+    let bg_color = ctx.style().visuals.window_fill;
     let cell_stroke = Stroke::new(1.0, bg_color);
     painter.rect(board_rect, 0.0, bg_color, Stroke::NONE);
 
