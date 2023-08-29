@@ -8,6 +8,7 @@ egui = { workspace = true }
 rand = "0.8.5"
 serde = { version = "1.0.188", features = ["serde_derive"] }
 serde_derive = "1.0.188"
+log = "0.4.20"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 getrandom = "0.2"
@@ -17,3 +18,4 @@ instant = "0.1.12"
 getrandom = { version = "0.2", features = ["js"] }
 instant = { version = "0.1.12", features = ["wasm-bindgen", "inaccurate"] }
 web-sys = { version = "0.3.64", features = ["Navigator", "Window"] }
+woothee = "0.13.0"

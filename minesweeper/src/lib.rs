@@ -522,6 +522,22 @@ fn board_idx_from_screen_pos(
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn vibrate(_ms: u32) {}
+
+#[cfg(target_arch = "wasm32")]
+fn vibrate(ms: u32) {
+    let Some(window) = web_sys::window() else { return };
+    let navigator = window.navigator();
+    let Ok(user_agent) = navigator.user_agent() else { return };
+    let parser = woothee::parser::Parser::new();
+    let Some(res) = parser.parse(&user_agent) else { return };
+    if res.vendor != "Apple" {
+        navigator.vibrate_with_duration(ms);
+        log::info!("{res:?}");
+    }
+}
+
 pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
     ui.ctx().request_repaint();
 
@@ -683,14 +699,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                                 pos,
                                 flipped,
                             );
-
-                            #[cfg(target_arch = "wasm32")]
-                            {
-                                if let Some(window) = web_sys::window() {
-                                    window.navigator().vibrate_with_duration(100);
-                                }
-                            }
-
+                            vibrate(100);
                             ms.game.hint(x, y);
                             ms.long_press = true;
                         }
@@ -735,7 +744,7 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
     // draw
     let painter = ui.painter();
     let dark_mode = ui.visuals().dark_mode;
-    let bg_color = ctx.style().visuals.window_fill;
+    let bg_color = ui.style().visuals.window_fill;
     let cell_stroke = Stroke::new(1.0, bg_color);
     painter.rect(board_rect, 0.0, bg_color, Stroke::NONE);
 
