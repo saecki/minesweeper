@@ -1,4 +1,5 @@
 use instant::SystemTime;
+use rand::Rng;
 use serde_derive::{Deserialize, Serialize};
 use std::fmt::Display;
 use std::time::Duration;
@@ -7,7 +8,10 @@ use egui::{
     Align, Align2, Button, Color32, ComboBox, FontId, Key, Layout, Pos2, Rect, RichText, Sense,
     Stroke, TextStyle, Ui, Vec2, Visuals,
 };
-use rand::Rng;
+
+pub mod combination_iter;
+mod gen;
+pub mod stackvec;
 
 #[derive(Serialize, Deserialize)]
 pub struct Minesweeper {
@@ -17,6 +21,7 @@ pub struct Minesweeper {
     cursor_x: i16,
     cursor_y: i16,
     difficulty: Difficulty,
+    unambigous: bool,
 }
 
 impl Default for Minesweeper {
@@ -27,21 +32,23 @@ impl Default for Minesweeper {
 
 impl Minesweeper {
     pub fn new() -> Self {
+        let unambigous = false;
         Self {
-            game: Game::easy(),
+            game: Game::easy(unambigous),
             long_press: false,
             cursor_visible: false,
             cursor_x: 0,
             cursor_y: 0,
             difficulty: Difficulty::Easy,
+            unambigous,
         }
     }
 
     fn new_game(&mut self) {
         self.game = match self.difficulty {
-            Difficulty::Easy => Game::easy(),
-            Difficulty::Medium => Game::medium(),
-            Difficulty::Hard => Game::hard(),
+            Difficulty::Easy => Game::easy(self.unambigous),
+            Difficulty::Medium => Game::medium(self.unambigous),
+            Difficulty::Hard => Game::hard(self.unambigous),
         };
     }
 
@@ -110,7 +117,7 @@ impl Minesweeper {
     }
 
     fn click(&mut self, frame: &mut eframe::Frame, x: i16, y: i16) {
-        self.game.click_(x, y);
+        self.game.click(x, y);
         if let Some(storage) = frame.storage_mut() {
             eframe::set_value(storage, eframe::APP_KEY, self);
         }
@@ -141,9 +148,10 @@ impl Display for Difficulty {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Game {
-    probability_range: std::ops::Range<f64>,
+    unambigous: bool,
+    num_mines: u16,
     play_state: PlayState,
     width: i16,
     height: i16,
@@ -151,143 +159,101 @@ struct Game {
 }
 
 impl Game {
-    fn easy() -> Self {
-        Self::new(20, 14, 0.15..0.18)
+    fn easy(unambigous: bool) -> Self {
+        Self::new(20, 14, 0.12..0.13, unambigous)
     }
 
-    fn medium() -> Self {
-        Self::new(30, 18, 0.17..0.20)
+    fn medium(unambigous: bool) -> Self {
+        Self::new(30, 18, 0.16..0.17, unambigous)
     }
 
-    fn hard() -> Self {
-        Self::new(40, 24, 0.19..0.22)
+    fn hard(unambigous: bool) -> Self {
+        Self::new(40, 24, 0.21..0.22, unambigous)
     }
 
-    fn new(width: i16, height: i16, probability_range: std::ops::Range<f64>) -> Self {
+    fn new(
+        width: i16,
+        height: i16,
+        probability_range: std::ops::Range<f64>,
+        unambigous: bool,
+    ) -> Self {
         let len = (width * height) as usize;
-        let mut game = Self {
-            probability_range,
+
+        let min = (probability_range.start * len as f64) as u16;
+        let max = (probability_range.end * len as f64) as u16;
+        let num_mines = rand::thread_rng().gen_range(min..max);
+
+        Self {
+            unambigous,
+            num_mines,
             play_state: PlayState::Init,
             width,
             height,
             fields: vec![Field::free(0); len],
-        };
-
-        game.gen_board();
-
-        game
+        }
     }
 
     fn clear_board(&mut self) {
         for f in self.fields.iter_mut() {
-            *f = Field::free(0);
+            f.state = FieldState::Free(0);
         }
     }
 
-    fn gen_board(&mut self) {
-        let mut rng = rand::thread_rng();
-        let mut available_indices = self.fields.len() - 1;
-
-        let min = (self.probability_range.start * available_indices as f64) as u32;
-        let max = (self.probability_range.end * available_indices as f64) as u32;
-        let num_mines = rng.gen_range(min..max);
-        for _i in 0..num_mines {
-            let mut available_idx = rng.gen_range(0..available_indices);
-            for (actual_index, f) in self.fields.iter_mut().enumerate() {
-                if f.state != FieldState::Mine {
-                    if available_idx == 0 {
-                        f.state = FieldState::Mine;
-
-                        let x = (actual_index % self.width as usize) as i16;
-                        let y = (actual_index / self.width as usize) as i16;
-
-                        self.increment_field(x - 1, y - 1);
-                        self.increment_field(x - 1, y + 0);
-                        self.increment_field(x - 1, y + 1);
-                        self.increment_field(x + 0, y - 1);
-                        self.increment_field(x + 0, y + 1);
-                        self.increment_field(x + 1, y - 1);
-                        self.increment_field(x + 1, y + 0);
-                        self.increment_field(x + 1, y + 1);
-                        break;
-                    }
-                    available_idx -= 1;
-                }
-            }
-
-            available_indices -= 1;
-        }
-    }
-
-    fn increment_field(&mut self, x: i16, y: i16) {
-        if self.is_in_bounds(x, y) {
-            if let FieldState::Free(neighbors) = &mut self[(x, y)].state {
-                *neighbors += 1;
-            }
-        }
-    }
-
-    fn click_(&mut self, x: i16, y: i16) {
+    fn click(&mut self, x: i16, y: i16) {
         if !self.is_in_bounds(x, y) {
             return;
         }
 
         let first = self.play_state == PlayState::Init;
-        loop {
-            let field = &mut self[(x, y)];
-            if field.show == ShowState::Hint {
+        if first {
+            self.gen_board();
+
+            let mut field = &self[(x, y)];
+            if field.visibility == Visibility::Hint {
                 return;
             }
 
-            match field.state {
-                FieldState::Free(neighbours) => {
-                    if first && neighbours != 0 {
-                        self.clear_board();
-                        self.gen_board();
-                        continue;
+            loop {
+                if field.state == FieldState::Free(0) {
+                    if !self.unambigous || self.is_unambigous(x, y) {
+                        break;
                     }
-
-                    if let ShowState::Show = field.show {
-                        let num_hinted_mines = self.count_hinted_mine(x - 1, y - 1)
-                            + self.count_hinted_mine(x - 1, y + 0)
-                            + self.count_hinted_mine(x - 1, y + 1)
-                            + self.count_hinted_mine(x + 0, y - 1)
-                            + self.count_hinted_mine(x + 0, y + 1)
-                            + self.count_hinted_mine(x + 1, y - 1)
-                            + self.count_hinted_mine(x + 1, y + 0)
-                            + self.count_hinted_mine(x + 1, y + 1);
-
-                        if num_hinted_mines == neighbours {
-                            self.show_if_not_hinted(x - 1, y - 1);
-                            self.show_if_not_hinted(x - 1, y + 0);
-                            self.show_if_not_hinted(x - 1, y + 1);
-                            self.show_if_not_hinted(x + 0, y - 1);
-                            self.show_if_not_hinted(x + 0, y + 1);
-                            self.show_if_not_hinted(x + 1, y - 1);
-                            self.show_if_not_hinted(x + 1, y + 0);
-                            self.show_if_not_hinted(x + 1, y + 1);
-                        }
-                    }
-
-                    self.show_neighbors(x, y);
-                    self.check_if_won();
-                    break;
                 }
-                FieldState::Mine => {
-                    if first {
-                        self.clear_board();
-                        self.gen_board();
-                        continue;
-                    }
 
-                    self.lose(x, y);
-                    break;
-                }
+                self.clear_board();
+                self.gen_board();
+                field = &self[(x, y)];
             }
+
+            self.play_state = PlayState::Playing(SystemTime::now());
         }
 
-        if first {
-            self.play_state = PlayState::Playing(SystemTime::now());
+        let field = &mut self[(x, y)];
+        if field.visibility == Visibility::Hint {
+            return;
+        }
+        match field.state {
+            FieldState::Free(neighbors) => {
+                if let Visibility::Show = field.visibility {
+                    let hinted_adjacents = self.hinted_adjacents(x, y);
+                    if hinted_adjacents.num() == neighbors {
+                        self.show_if_not_hinted(x - 1, y - 1);
+                        self.show_if_not_hinted(x - 1, y + 0);
+                        self.show_if_not_hinted(x - 1, y + 1);
+                        self.show_if_not_hinted(x + 0, y - 1);
+                        self.show_if_not_hinted(x + 0, y + 1);
+                        self.show_if_not_hinted(x + 1, y - 1);
+                        self.show_if_not_hinted(x + 1, y + 0);
+                        self.show_if_not_hinted(x + 1, y + 1);
+                    }
+                }
+
+                self.show_neighbors(x, y);
+                self.check_if_won();
+            }
+            FieldState::Mine => {
+                self.lose(x, y);
+            }
         }
     }
 
@@ -297,10 +263,10 @@ impl Game {
         }
 
         let field = &mut self[(x, y)];
-        if field.show == ShowState::Hint {
-            field.show = ShowState::Hide;
-        } else if field.show == ShowState::Hide {
-            field.show = ShowState::Hint;
+        if field.visibility == Visibility::Hint {
+            field.visibility = Visibility::Hide;
+        } else if field.visibility == Visibility::Hide {
+            field.visibility = Visibility::Hint;
         }
     }
 
@@ -309,17 +275,13 @@ impl Game {
             return;
         };
         let duration = SystemTime::now().duration_since(start).unwrap();
-        self[(x, y)].show = ShowState::Show;
+        self[(x, y)].visibility = Visibility::Show;
         self.play_state = PlayState::Lost(duration);
     }
 
     fn check_if_won(&mut self) {
-        for f in self.fields.iter() {
-            if let FieldState::Free(_) = f.state {
-                if f.show != ShowState::Show {
-                    return;
-                }
-            }
+        if !self.is_solved() {
+            return;
         }
 
         let PlayState::Playing(start) = self.play_state else {
@@ -328,7 +290,7 @@ impl Game {
         let duration = SystemTime::now().duration_since(start).unwrap();
         self.play_state = PlayState::Won(duration);
         for f in self.fields.iter_mut() {
-            f.show = ShowState::Show;
+            f.visibility = Visibility::Show;
         }
     }
 
@@ -338,7 +300,7 @@ impl Game {
         }
 
         let field = &mut self[(x, y)];
-        if field.show == ShowState::Show || field.show == ShowState::Hint {
+        if field.visibility == Visibility::Show || field.visibility == Visibility::Hint {
             return;
         }
 
@@ -356,11 +318,11 @@ impl Game {
         }
 
         let field = &mut self[(x, y)];
-        if field.show == ShowState::Show {
+        if field.visibility == Visibility::Show {
             return;
         }
 
-        field.show = ShowState::Show;
+        field.visibility = Visibility::Show;
 
         if field.state != FieldState::Free(0) {
             return;
@@ -376,30 +338,14 @@ impl Game {
         self.show_neighbors(x + 1, y + 1);
     }
 
-    fn count_hinted_mine(&self, x: i16, y: i16) -> u8 {
-        if !self.is_in_bounds(x, y) {
-            return 0;
-        }
-
-        if self[(x, y)].show == ShowState::Hint {
-            return 1;
-        }
-
-        0
-    }
-
-    fn open_mine_count(&self) -> i32 {
-        let mut mines = 0;
+    fn open_mine_count(&self) -> i16 {
         let mut hints = 0;
         for f in self.fields.iter() {
-            if let FieldState::Mine = f.state {
-                mines += 1;
-            }
-            if let ShowState::Hint = f.show {
+            if let Visibility::Hint = f.visibility {
                 hints += 1;
             }
         }
-        mines - hints
+        self.num_mines as i16 - hints
     }
 
     fn play_duration(&self) -> Duration {
@@ -485,23 +431,23 @@ impl<'de> serde::Deserialize<'de> for PlayState {
     }
 }
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct Field {
-    show: ShowState,
+    visibility: Visibility,
     state: FieldState,
 }
 
 impl Field {
     fn free(neighbors: u8) -> Self {
         Self {
-            show: ShowState::Hide,
+            visibility: Visibility::Hide,
             state: FieldState::Free(neighbors),
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum ShowState {
+enum Visibility {
     Hide,
     Hint,
     Show,
@@ -573,12 +519,7 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
     ui.allocate_ui(Vec2::new(ui.available_width(), menu_bar_height), |ui| {
         ui.horizontal(|ui| {
             ui.add_space(board_offset.x);
-            let open_mine_count = match ms.game.play_state {
-                PlayState::Init => "?".to_string(),
-                PlayState::Playing(_) | PlayState::Won(_) | PlayState::Lost(_) => {
-                    ms.game.open_mine_count().to_string()
-                }
-            };
+            let open_mine_count = ms.game.open_mine_count().to_string();
             let text = RichText::new(open_mine_count).font(FontId::monospace(30.0));
             ui.label(text);
 
@@ -636,6 +577,10 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
                 if ms.difficulty != prev_difficulty && ms.game.play_state == PlayState::Init {
                     ms.new_game();
                 }
+
+                ui.add_space(20.0);
+                let text = RichText::new("unambigous").font(FontId::proportional(20.0));
+                ui.checkbox(&mut ms.unambigous, text);
             });
         });
     });
@@ -815,14 +760,14 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
             text_style.size = cell_size.y * 0.8;
 
             match ms.game.play_state {
-                PlayState::Init | PlayState::Playing(_) => match (field.state, field.show) {
-                    (_, ShowState::Hide) => {
+                PlayState::Init | PlayState::Playing(_) => match (field.state, field.visibility) {
+                    (_, Visibility::Hide) => {
                         painter.rect(cell_rect, 0.0, color_hide, cell_stroke);
                     }
-                    (_, ShowState::Hint) => {
+                    (_, Visibility::Hint) => {
                         painter.rect(cell_rect, 0.0, color_hint, cell_stroke);
                     }
-                    (FieldState::Free(n), ShowState::Show) => {
+                    (FieldState::Free(n), Visibility::Show) => {
                         painter.rect(cell_rect, 0.0, color_show, cell_stroke);
                         if n != 0 {
                             let num_color = colors_nums[n as usize - 1];
@@ -835,12 +780,12 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
                             );
                         }
                     }
-                    (FieldState::Mine, ShowState::Show) => {
+                    (FieldState::Mine, Visibility::Show) => {
                         // Just for debugging
                         painter.rect(cell_rect, 0.0, Color32::GREEN, cell_stroke);
                     }
                 },
-                PlayState::Won(_) => match (field.state, field.show) {
+                PlayState::Won(_) => match (field.state, field.visibility) {
                     (FieldState::Free(n), _) => {
                         painter.rect(cell_rect, 0.0, color_show, cell_stroke);
                         if n != 0 {
@@ -854,7 +799,7 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
                             );
                         }
                     }
-                    (FieldState::Mine, ShowState::Hint) => {
+                    (FieldState::Mine, Visibility::Hint) => {
                         painter.rect(cell_rect, 0.0, color_hint, cell_stroke);
                         painter.text(
                             cell_center_pos,
@@ -875,11 +820,11 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
                         );
                     }
                 },
-                PlayState::Lost(_) => match (field.state, field.show) {
-                    (FieldState::Free(_), ShowState::Hide) => {
+                PlayState::Lost(_) => match (field.state, field.visibility) {
+                    (FieldState::Free(_), Visibility::Hide) => {
                         painter.rect(cell_rect, 0.0, color_hide, cell_stroke);
                     }
-                    (FieldState::Free(_), ShowState::Hint) => {
+                    (FieldState::Free(_), Visibility::Hint) => {
                         painter.rect(cell_rect, 0.0, color_hint, cell_stroke);
                         painter.text(
                             cell_center_pos,
@@ -889,7 +834,7 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
                             Color32::RED,
                         );
                     }
-                    (FieldState::Free(n), ShowState::Show) => {
+                    (FieldState::Free(n), Visibility::Show) => {
                         painter.rect(cell_rect, 0.0, color_show, cell_stroke);
                         if n != 0 {
                             let num_color = colors_nums[n as usize - 1];
@@ -902,7 +847,7 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
                             );
                         }
                     }
-                    (FieldState::Mine, ShowState::Hide) => {
+                    (FieldState::Mine, Visibility::Hide) => {
                         painter.rect(cell_rect, 0.0, color_show, cell_stroke);
                         painter.text(
                             cell_center_pos,
@@ -912,7 +857,7 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
                             Color32::BLACK,
                         );
                     }
-                    (FieldState::Mine, ShowState::Hint) => {
+                    (FieldState::Mine, Visibility::Hint) => {
                         painter.rect(cell_rect, 0.0, color_hint, cell_stroke);
                         painter.text(
                             cell_center_pos,
@@ -922,7 +867,7 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
                             Color32::BLACK,
                         );
                     }
-                    (FieldState::Mine, ShowState::Show) => {
+                    (FieldState::Mine, Visibility::Show) => {
                         painter.rect(cell_rect, 0.0, color_lose, cell_stroke);
                         painter.text(
                             cell_center_pos,

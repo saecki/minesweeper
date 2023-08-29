@@ -20,7 +20,9 @@ impl App for MinesweeperApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         CentralPanel::default()
             .frame(Frame::none().fill(ctx.style().visuals.window_fill))
-            .show(ctx, |ui| minesweeper::update(frame, ui, &mut self.minesweeper));
+            .show(ctx, |ui| {
+                minesweeper::update(frame, ui, &mut self.minesweeper)
+            });
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -41,7 +43,7 @@ fn main() {
             )
             .await;
         if let Err(e) = res {
-            println!("error running app: {e:?}");
+            log::error!("error running app: {e:?}");
         }
     });
 }
