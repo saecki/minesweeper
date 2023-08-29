@@ -683,6 +683,14 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
                                 pos,
                                 flipped,
                             );
+
+                            #[cfg(target_arch = "wasm32")]
+                            {
+                                if let Some(window) = web_sys::window() {
+                                    window.navigator().vibrate_with_duration(100);
+                                }
+                            }
+
                             ms.game.hint(x, y);
                             ms.long_press = true;
                         }

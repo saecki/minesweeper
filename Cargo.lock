@@ -1372,6 +1372,7 @@ dependencies = [
  "rand",
  "serde",
  "serde_derive",
+ "web-sys",
 ]
 
 [[package]]
