@@ -1117,6 +1117,10 @@ function __wbg_get_imports() {
         getInt32Memory0()[arg0 / 4 + 1] = len1;
         getInt32Memory0()[arg0 / 4 + 0] = ptr1;
     }, arguments) };
+    imports.wbg.__wbg_vibrate_23cb5a60bf888696 = function(arg0, arg1) {
+        const ret = getObject(arg0).vibrate(arg1 >>> 0);
+        return ret;
+    };
     imports.wbg.__wbg_bindVertexArrayOES_b7d9da7e073aa6b5 = function(arg0, arg1) {
         getObject(arg0).bindVertexArrayOES(getObject(arg1));
     };
@@ -1340,19 +1344,19 @@ function __wbg_get_imports() {
         const ret = wasm.memory;
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper876 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper877 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 202, __wbg_adapter_30);
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper878 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper879 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 202, __wbg_adapter_33);
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper880 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper881 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 202, __wbg_adapter_36);
         return addHeapObject(ret);
     };
-    imports.wbg.__wbindgen_closure_wrapper1008 = function(arg0, arg1, arg2) {
+    imports.wbg.__wbindgen_closure_wrapper1009 = function(arg0, arg1, arg2) {
         const ret = makeMutClosure(arg0, arg1, 231, __wbg_adapter_39);
         return addHeapObject(ret);
     };
@@ -1395,7 +1399,7 @@ async function __wbg_init(input) {
     if (wasm !== undefined) return wasm;
 
     if (typeof input === 'undefined') {
-        input = new URL('minesweeper_web-db1354a9f0e7119f_bg.wasm', import.meta.url);
+        input = new URL('minesweeper_web-15fb7206bdafbcaf_bg.wasm', import.meta.url);
     }
     const imports = __wbg_get_imports();
 
