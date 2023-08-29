@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use egui::{
     Align, Align2, Button, Color32, ComboBox, FontId, Key, Layout, Pos2, Rect, RichText, Sense,
-    Stroke, TextStyle, Ui, Vec2,
+    Stroke, TextStyle, Ui, Vec2, Visuals,
 };
 use rand::Rng;
 
@@ -551,6 +551,25 @@ pub fn update(ui: &mut Ui, ms: &mut Minesweeper) {
             };
             let text = RichText::new(open_mine_count).font(FontId::monospace(30.0));
             ui.label(text);
+
+            ui.add_space(20.0);
+            let visuals = ui.style().visuals.clone();
+            let new_visuals = if visuals.dark_mode {
+                let text = RichText::new("☀").font(FontId::proportional(20.0));
+                ui.add(Button::new(text).frame(false))
+                    .on_hover_text("Switch to light mode")
+                    .clicked()
+                    .then_some(Visuals::light())
+            } else {
+                let text = RichText::new("🌙").font(FontId::proportional(20.0));
+                ui.add(Button::new(text).frame(false))
+                    .on_hover_text("Switch to dark mode")
+                    .clicked()
+                    .then_some(Visuals::dark())
+            };
+            if let Some(visuals) = new_visuals {
+                ui.ctx().set_visuals(visuals);
+            }
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.add_space(board_offset.x);
