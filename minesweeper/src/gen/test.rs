@@ -1,3 +1,5 @@
+use crate::{Difficulty, Field};
+
 use super::*;
 
 fn place_mine(game: &mut Game, x: i16, y: i16) {
@@ -10,10 +12,21 @@ fn place_mine(game: &mut Game, x: i16, y: i16) {
     game.increment_field(x + 1, y - 1);
     game.increment_field(x + 1, y + 0);
     game.increment_field(x + 1, y + 1);
+
+    game.num_mines += 1;
 }
 
 fn game(width: i16, height: i16) -> Game {
-    Game::new(width, height, 0.0..1.0, crate::Difficulty::Easy, false)
+    let len = (width * height) as usize;
+    Game {
+        width,
+        height,
+        num_mines: 0,
+        difficulty: Difficulty::Easy,
+        unambigous: false,
+        play_state: crate::PlayState::Init,
+        fields: vec![Field::free(0); len],
+    }
 }
 
 #[test]

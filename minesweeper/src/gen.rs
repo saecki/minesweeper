@@ -24,43 +24,51 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
-// fn print_game(game: &Game, mx: i16, my: i16) {
-//     let mut buf = String::new();
-//     fmt_game(&mut buf, game, mx, my).unwrap();
-//     println!("{buf}");
-// }
-//
-// fn fmt_game(f: &mut impl std::fmt::Write, game: &Game, mx: i16, my: i16) -> std::fmt::Result {
-//     write!(f, "  ")?;
-//     for x in 0..game.width {
-//         write!(f, "{x:2}")?;
-//     }
-//     writeln!(f)?;
-//
-//     for y in 0..game.height {
-//         write!(f, "{y:2}")?;
-//         for x in 0..game.width {
-//             let field = &game[(x, y)];
-//             if x == mx && y == my {
-//                 write!(f, "\x1b[1;7;34m")?;
-//             } else {
-//                 match field.visibility {
-//                     Visibility::Hide => write!(f, "\x1b[1;7;90m")?,
-//                     Visibility::Hint => write!(f, "\x1b[1;7;33m")?,
-//                     Visibility::Show => write!(f, "\x1b[1;7;92m")?,
-//                 };
-//             }
-//             match field.state {
-//                 FieldState::Free(n) if n == 0 => write!(f, "  ")?,
-//                 FieldState::Free(n) => write!(f, " {n}")?,
-//                 FieldState::Mine => write!(f, " *")?,
-//             }
-//             write!(f, "\x1b[0m")?;
-//         }
-//         writeln!(f)?;
-//     }
-//     Ok(())
-// }
+fn print_game(game: &Game, mx: i16, my: i16, n: u8) {
+    let mut buf = String::new();
+    fmt_game(&mut buf, game, mx, my, n).unwrap();
+    println!("{buf}");
+}
+
+fn fmt_game(
+    f: &mut impl std::fmt::Write,
+    game: &Game,
+    mx: i16,
+    my: i16,
+    n: u8,
+) -> std::fmt::Result {
+    write!(f, "{:1$}", "", n as usize * 4)?;
+    write!(f, "  ")?;
+    for x in 0..game.width {
+        write!(f, "{x:2}")?;
+    }
+    writeln!(f)?;
+
+    for y in 0..game.height {
+        write!(f, "{:1$}", "", n as usize * 4)?;
+        write!(f, "{y:2}")?;
+        for x in 0..game.width {
+            let field = &game[(x, y)];
+            if x == mx && y == my {
+                write!(f, "\x1b[1;7;34m")?;
+            } else {
+                match field.visibility {
+                    Visibility::Hide => write!(f, "\x1b[1;7;90m")?,
+                    Visibility::Hint => write!(f, "\x1b[1;7;33m")?,
+                    Visibility::Show => write!(f, "\x1b[1;7;92m")?,
+                };
+            }
+            match field.state {
+                FieldState::Free(n) if n == 0 => write!(f, "  ")?,
+                FieldState::Free(n) => write!(f, " {n}")?,
+                FieldState::Mine => write!(f, " *")?,
+            }
+            write!(f, "\x1b[0m")?;
+        }
+        writeln!(f)?;
+    }
+    Ok(())
+}
 
 #[derive(Clone, Debug, PartialEq)]
 enum Solve {
@@ -160,7 +168,7 @@ impl Game {
                 copy.clone_from(&board);
             }
 
-            match board.guess_mines(0, board.width, 0, board.height) {
+            match board.guess_mines(0, board.width, 0, board.height, 0) {
                 Err(e) => return Err(e),
                 Ok(Solve::Done) => return Ok(()),
                 Ok(Solve::Progress(b)) => board = b,
@@ -169,7 +177,7 @@ impl Game {
         }
     }
 
-    fn guess_mines(&self, x_s: i16, x_e: i16, y_s: i16, y_e: i16) -> Result<Solve, Error> {
+    fn guess_mines(&self, x_s: i16, x_e: i16, y_s: i16, y_e: i16, n: u8) -> Result<Solve, Error> {
         let mut possible_fields = Vec::new();
         for y in y_s..y_e {
             for x in x_s..x_e {
@@ -190,6 +198,7 @@ impl Game {
             }
         }
         if possible_fields.len() == 0 {
+            println!("no missing neighbors");
             return Ok(Solve::NoMissingNeighbors);
         }
 
@@ -199,6 +208,12 @@ impl Game {
 
         let mut num_ambigous = 0;
         'guessing: for &(x, y, num_missing_neighbors, adjacents) in possible_fields.iter() {
+            if self.open_mine_count() < num_missing_neighbors as i16 {
+                // The board is invalid, some hints have been placed incorrectly.
+                println!("invalid minecount");
+                return Err(Error::Invalid);
+            }
+
             let num_hidden = adjacents.num();
             let offsets = adjacents.offsets();
 
@@ -226,7 +241,7 @@ impl Game {
                             if let FieldState::Free(neighbors) = field.state {
                                 let hinted_adjacents = board.hinted_adjacents(fx, fy);
                                 if hinted_adjacents.num() > neighbors {
-                                    // println!("invalid");
+                                    println!("invalid other");
                                     continue 'combinations;
                                 }
                             }
@@ -247,6 +262,7 @@ impl Game {
                                 if let FieldState::Free(neighbors) = field.state {
                                     let hinted_adjacents = board.hinted_adjacents(x, y);
                                     if hinted_adjacents.num() < neighbors {
+                                        println!("invalid still open fields");
                                         continue 'combinations;
                                     }
                                 }
@@ -254,11 +270,11 @@ impl Game {
                         }
                     }
                 } else {
-                    let x_s = i16::max(x - 2, 0);
-                    let x_e = i16::min(x + 3, board.width);
-                    let y_s = i16::max(y - 2, 0);
-                    let y_e = i16::min(y + 3, board.height);
-                    match board.guess_mines(x_s, x_e, y_s, y_e) {
+                    let x_s = i16::max(x - 3, 0);
+                    let x_e = i16::min(x + 4, board.width);
+                    let y_s = i16::max(y - 3, 0);
+                    let y_e = i16::min(y + 4, board.height);
+                    match board.guess_mines(x_s, x_e, y_s, y_e, n + 1) {
                         Err(Error::Invalid) => continue 'combinations,
                         Err(Error::Ambigous) => {
                             // later step are ambigous but if all other combinations are invalid,
@@ -273,6 +289,7 @@ impl Game {
                 if valid_board.is_none() {
                     valid_board = Some(board);
                 } else {
+                    println!("ambigous");
                     num_ambigous += 1;
                     continue 'guessing;
                 }
@@ -281,17 +298,24 @@ impl Game {
             if let Some(valid_board) = valid_board {
                 // println!("exactly one found");
                 if valid_board.is_solved() {
+                    println!("solved");
                     return Ok(Solve::Done);
                 }
 
                 // Lock in the progress and repeat steps
+                if n == 1 {
+                    println!("progress with:");
+                    print_game(&valid_board, -1, -1, n);
+                }
                 return Ok(Solve::Progress(valid_board));
             }
         }
 
         if num_ambigous > 0 {
+            println!("{num_ambigous} ambigous");
             Err(Error::Ambigous)
         } else {
+            println!("just invalid");
             Err(Error::Invalid)
         }
     }
