@@ -12,20 +12,24 @@ fn place_mine(game: &mut Game, x: i16, y: i16) {
     game.increment_field(x + 1, y + 1);
 }
 
+fn game(width: i16, height: i16) -> Game {
+    Game::new(width, height, 0.0..1.0, crate::Difficulty::Easy, false)
+}
+
 #[test]
 fn ambigous_board() {
-    let mut game = Game::new(5, 5, 0.0..0.0, false);
+    let mut game = game(5, 5);
     place_mine(&mut game, 3, 1);
     place_mine(&mut game, 2, 2);
     place_mine(&mut game, 1, 3);
 
     let res = game.validate_board(0, 0);
-    assert_eq!(res, Err(Error::Invalid));
+    assert_eq!(res, Err(Error::Ambigous));
 }
 
 #[test]
 fn solvable_board_1() {
-    let mut game = Game::new(5, 5, 0.0..0.0, false);
+    let mut game = game(5, 5);
     place_mine(&mut game, 2, 2);
     place_mine(&mut game, 2, 3);
 
@@ -35,7 +39,7 @@ fn solvable_board_1() {
 
 #[test]
 fn solvable_board_2() {
-    let mut game = Game::new(4, 5, 0.0..0.0, false);
+    let mut game = game(4, 5);
     place_mine(&mut game, 0, 3);
     place_mine(&mut game, 1, 2);
     place_mine(&mut game, 2, 2);
@@ -47,7 +51,7 @@ fn solvable_board_2() {
 
 #[test]
 fn solvable_board_3() {
-    let mut game = Game::new(9, 5, 0.0..0.0, false);
+    let mut game = game(9, 5);
     place_mine(&mut game, 0, 3);
     place_mine(&mut game, 1, 2);
     place_mine(&mut game, 2, 2);
@@ -62,7 +66,7 @@ fn solvable_board_3() {
 
 #[test]
 fn solvable_board_4() {
-    let mut game = Game::new(5, 5, 0.0..0.0, false);
+    let mut game = game(5, 5);
     place_mine(&mut game, 2, 2);
     place_mine(&mut game, 1, 3);
 
@@ -72,7 +76,7 @@ fn solvable_board_4() {
 
 #[test]
 fn hidden_adjacents_1() {
-    let game = Game::new(5, 5, 0.0..0.0, false);
+    let game = game(5, 5);
 
     let hidden_adjacents = game.hidden_adjacents(0, 0);
     let values = hidden_adjacents.offsets();
@@ -86,7 +90,7 @@ fn hidden_adjacents_1() {
 
 #[test]
 fn hidden_adjacents_2() {
-    let mut game = Game::new(5, 5, 0.0..0.0, false);
+    let mut game = game(5, 5);
     game[(1, 1)].visibility = Visibility::Hint;
 
     let hidden_adjacents = game.hidden_adjacents(0, 0);
@@ -100,7 +104,7 @@ fn hidden_adjacents_2() {
 
 #[test]
 fn hidden_adjacents_3() {
-    let game = Game::new(5, 5, 0.0..0.0, false);
+    let game = game(5, 5);
 
     let hidden_adjacents = game.hidden_adjacents(4, 0);
     let values = hidden_adjacents.offsets();
@@ -114,7 +118,7 @@ fn hidden_adjacents_3() {
 
 #[test]
 fn hidden_adjacents_4() {
-    let mut game = Game::new(5, 5, 0.0..0.0, false);
+    let mut game = game(5, 5);
     game[(3, 1)].visibility = Visibility::Hint;
 
     let hidden_adjacents = game.hidden_adjacents(4, 0);
@@ -128,7 +132,7 @@ fn hidden_adjacents_4() {
 
 #[test]
 fn hidden_adjacents_5() {
-    let game = Game::new(5, 5, 0.0..0.0, false);
+    let game = game(5, 5);
 
     let hidden_adjacents = game.hidden_adjacents(4, 4);
     let values = hidden_adjacents.offsets();
@@ -142,7 +146,7 @@ fn hidden_adjacents_5() {
 
 #[test]
 fn hidden_adjacents_6() {
-    let mut game = Game::new(5, 5, 0.0..0.0, false);
+    let mut game = game(5, 5);
     game[(3, 3)].visibility = Visibility::Hint;
 
     let hidden_adjacents = game.hidden_adjacents(4, 4);
@@ -156,7 +160,7 @@ fn hidden_adjacents_6() {
 
 #[test]
 fn hidden_adjacents_7() {
-    let game = Game::new(5, 5, 0.0..0.0, false);
+    let game = game(5, 5);
 
     let hidden_adjacents = game.hidden_adjacents(0, 4);
     let values = hidden_adjacents.offsets();
@@ -170,7 +174,7 @@ fn hidden_adjacents_7() {
 
 #[test]
 fn hidden_adjacents_8() {
-    let mut game = Game::new(5, 5, 0.0..0.0, false);
+    let mut game = game(5, 5);
     game[(1, 3)].visibility = Visibility::Hint;
 
     let hidden_adjacents = game.hidden_adjacents(0, 4);

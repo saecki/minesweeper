@@ -5,8 +5,8 @@ use std::fmt::Display;
 use std::time::Duration;
 
 use egui::{
-    Align, Align2, Button, Color32, ComboBox, FontId, Key, Layout, Pos2, Rect, RichText, Sense,
-    Stroke, TextStyle, Ui, Vec2, Visuals,
+    Align, Align2, Button, Color32, ComboBox, FontId, Key, Layout, Pos2, Rect, RichText, Rounding,
+    Sense, Stroke, TextStyle, Ui, Vec2, Visuals,
 };
 
 pub mod combination_iter;
@@ -22,6 +22,7 @@ pub struct Minesweeper {
     cursor_y: i16,
     difficulty: Difficulty,
     unambigous: bool,
+    highscores: [Vec<Duration>; 6],
 }
 
 impl Default for Minesweeper {
@@ -41,6 +42,14 @@ impl Minesweeper {
             cursor_y: 0,
             difficulty: Difficulty::Easy,
             unambigous,
+            highscores: [
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+                Vec::new(),
+            ],
         }
     }
 
@@ -117,7 +126,16 @@ impl Minesweeper {
     }
 
     fn click(&mut self, frame: &mut eframe::Frame, x: i16, y: i16) {
-        self.game.click(x, y);
+        if let Some(duration) = self.game.click(x, y) {
+            let scores = &mut self.highscores
+                [self.game.difficulty as usize + (3 * self.game.unambigous as usize)];
+            let idx = scores.iter().position(|d| duration < *d);
+            match idx {
+                Some(i) => scores.insert(i, duration),
+                None => scores.push(duration),
+            }
+        }
+
         if let Some(storage) = frame.storage_mut() {
             eframe::set_value(storage, eframe::APP_KEY, self);
         }
@@ -131,11 +149,11 @@ impl Minesweeper {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum Difficulty {
-    Easy,
-    Medium,
-    Hard,
+    Easy = 0,
+    Medium = 1,
+    Hard = 2,
 }
 
 impl Display for Difficulty {
@@ -150,6 +168,7 @@ impl Display for Difficulty {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 struct Game {
+    difficulty: Difficulty,
     unambigous: bool,
     num_mines: u16,
     play_state: PlayState,
@@ -160,21 +179,22 @@ struct Game {
 
 impl Game {
     fn easy(unambigous: bool) -> Self {
-        Self::new(20, 14, 0.12..0.13, unambigous)
+        Self::new(20, 14, 0.12..0.13, Difficulty::Easy, unambigous)
     }
 
     fn medium(unambigous: bool) -> Self {
-        Self::new(30, 18, 0.16..0.17, unambigous)
+        Self::new(30, 18, 0.16..0.17, Difficulty::Medium, unambigous)
     }
 
     fn hard(unambigous: bool) -> Self {
-        Self::new(40, 24, 0.21..0.22, unambigous)
+        Self::new(40, 24, 0.21..0.22, Difficulty::Hard, unambigous)
     }
 
     fn new(
         width: i16,
         height: i16,
         probability_range: std::ops::Range<f64>,
+        difficulty: Difficulty,
         unambigous: bool,
     ) -> Self {
         let len = (width * height) as usize;
@@ -184,6 +204,7 @@ impl Game {
         let num_mines = rand::thread_rng().gen_range(min..max);
 
         Self {
+            difficulty,
             unambigous,
             num_mines,
             play_state: PlayState::Init,
@@ -199,9 +220,10 @@ impl Game {
         }
     }
 
-    fn click(&mut self, x: i16, y: i16) {
+    /// Returns the duration if the game was won.
+    fn click(&mut self, x: i16, y: i16) -> Option<Duration> {
         if !self.is_in_bounds(x, y) {
-            return;
+            return None;
         }
 
         let first = self.play_state == PlayState::Init;
@@ -209,10 +231,6 @@ impl Game {
             self.gen_board();
 
             let mut field = &self[(x, y)];
-            if field.visibility == Visibility::Hint {
-                return;
-            }
-
             loop {
                 if field.state == FieldState::Free(0) {
                     if !self.unambigous || self.is_unambigous(x, y) {
@@ -230,7 +248,7 @@ impl Game {
 
         let field = &mut self[(x, y)];
         if field.visibility == Visibility::Hint {
-            return;
+            return None;
         }
         match field.state {
             FieldState::Free(neighbors) => {
@@ -249,10 +267,11 @@ impl Game {
                 }
 
                 self.show_neighbors(x, y);
-                self.check_if_won();
+                self.check_if_won()
             }
             FieldState::Mine => {
                 self.lose(x, y);
+                None
             }
         }
     }
@@ -279,19 +298,20 @@ impl Game {
         self.play_state = PlayState::Lost(duration);
     }
 
-    fn check_if_won(&mut self) {
+    fn check_if_won(&mut self) -> Option<Duration> {
         if !self.is_solved() {
-            return;
+            return None;
         }
 
         let PlayState::Playing(start) = self.play_state else {
-            return;
+            return None;
         };
         let duration = SystemTime::now().duration_since(start).unwrap();
         self.play_state = PlayState::Won(duration);
         for f in self.fields.iter_mut() {
             f.visibility = Visibility::Show;
         }
+        Some(duration)
     }
 
     fn show_if_not_hinted(&mut self, x: i16, y: i16) {
@@ -900,5 +920,68 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
             Color32::TRANSPARENT,
             Stroke::new(2.0, color_cursor),
         );
+    }
+
+    if let PlayState::Won(_) | PlayState::Lost(_) = ms.game.play_state {
+        let min_dimension = available_size.min_elem();
+        let margin = Vec2::splat(min_dimension * 0.05);
+        let scoreboard_width = 400.0;
+        let scoreboard_offset =
+            board_offset + Vec2::new(0.5 * (board_size.x - scoreboard_width), margin.y);
+        let scoreboard_size = Vec2::new(scoreboard_width, board_size.y - 2.0 * margin.y);
+        let rect = Rect::from_min_size(scoreboard_offset, scoreboard_size);
+        painter.rect(
+            rect,
+            Rounding::same(min_dimension * 0.02),
+            Color32::from_black_alpha(0xb0),
+            Stroke::NONE,
+        );
+
+        let title_pos = scoreboard_offset + Vec2::new(0.5 * scoreboard_size.x, margin.y);
+        let unambigous_text = if ms.unambigous {
+            "unambigous"
+        } else {
+            "ambigous"
+        };
+        let title = format!("{} {}", ms.difficulty, unambigous_text);
+        painter.text(
+            title_pos,
+            Align2::CENTER_TOP,
+            title,
+            FontId::proportional(30.0),
+            Color32::from_white_alpha(0xb0),
+        );
+
+        let scores = &ms.highscores[ms.difficulty as usize + (3 * ms.unambigous as usize)];
+        let is_same_mode = ms.difficulty == ms.game.difficulty && ms.unambigous == ms.game.unambigous;
+
+        let mut score_y = scoreboard_offset.y + 2.0 * margin.y + 30.0;
+        let num_x = scoreboard_offset.x + margin.x;
+        let duration_x = scoreboard_offset.x + scoreboard_size.x - margin.x;
+        for (i, score) in scores.iter().take(10).enumerate() {
+            let mut text_color = Color32::from_white_alpha(0xb0);
+            if is_same_mode {
+                if let PlayState::Won(d) = ms.game.play_state {
+                    if *score == d {
+                        text_color = Color32::from_rgba_unmultiplied(0xff, 0xc0, 0x30, 0xb0);
+                    }
+                }
+            }
+            painter.text(
+                Pos2::new(num_x, score_y),
+                Align2::LEFT_TOP,
+                format!("{}.", i + 1),
+                FontId::proportional(30.0),
+                text_color,
+            );
+            painter.text(
+                Pos2::new(duration_x, score_y),
+                Align2::RIGHT_TOP,
+                format_duration(*score),
+                FontId::proportional(30.0),
+                text_color,
+            );
+            score_y += 40.0;
+        }
     }
 }
