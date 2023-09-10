@@ -483,7 +483,8 @@ fn format_duration(duration: Duration) -> String {
     let total_secs = duration.as_secs();
     let secs = total_secs % 60;
     let mins = total_secs / 60;
-    format!("{mins:2}:{secs:02}")
+    let sub_secs = duration.subsec_millis() / 10;
+    format!("{mins:2}:{secs:02}.{sub_secs:02}")
 }
 
 fn board_idx_from_screen_pos(
