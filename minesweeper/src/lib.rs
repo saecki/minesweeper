@@ -142,6 +142,8 @@ impl Minesweeper {
     }
 
     fn hint(&mut self, frame: &mut eframe::Frame, x: i16, y: i16) {
+        let PlayState::Playing(_) = self.game.play_state else { return };
+
         self.game.hint_(x, y);
         if let Some(storage) = frame.storage_mut() {
             eframe::set_value(storage, eframe::APP_KEY, self);
