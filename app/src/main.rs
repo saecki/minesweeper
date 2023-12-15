@@ -35,7 +35,6 @@ impl App for MinesweeperApp {
 
 fn main() {
     let options = NativeOptions {
-        drag_and_drop_support: true,
         follow_system_theme: true,
         ..Default::default()
     };
