@@ -649,7 +649,7 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
 
         if let PlayState::Init | PlayState::Playing(_) = ms.game.play_state {
             if i.key_pressed(Key::Enter) || i.key_pressed(Key::Space) {
-                if i.modifiers.ctrl {
+                if i.modifiers.ctrl || i.modifiers.shift {
                     ms.hint(frame, ms.cursor_x, ms.cursor_y);
                 } else {
                     ms.click(frame, ms.cursor_x, ms.cursor_y);
@@ -956,7 +956,8 @@ pub fn update(frame: &mut eframe::Frame, ui: &mut Ui, ms: &mut Minesweeper) {
         );
 
         let scores = &ms.highscores[ms.difficulty as usize + (3 * ms.unambigous as usize)];
-        let is_same_mode = ms.difficulty == ms.game.difficulty && ms.unambigous == ms.game.unambigous;
+        let is_same_mode =
+            ms.difficulty == ms.game.difficulty && ms.unambigous == ms.game.unambigous;
 
         let mut score_y = scoreboard_offset.y + 2.0 * margin.y + 30.0;
         let num_x = scoreboard_offset.x + margin.x;
