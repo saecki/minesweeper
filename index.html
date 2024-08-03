@@ -11,9 +11,9 @@
 
     <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
     
-<script type="module" nonce="+K7oTJYKxVNcUPc+mwoZNQ==">
-import init, * as bindings from '/minesweeper/minesweeper_web-a592177f8a6658e4.js';
-const wasm = await init('/minesweeper/minesweeper_web-a592177f8a6658e4_bg.wasm');
+<script type="module" nonce="Oqglqb44rRKe0TS67GUYoQ==">
+import init, * as bindings from '/minesweeper/minesweeper_web-3d77f779a6ebea28.js';
+const wasm = await init('/minesweeper/minesweeper_web-3d77f779a6ebea28_bg.wasm');
 
 
 window.wasmBindings = bindings;
@@ -119,8 +119,8 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 
     </style>
 
-<link rel="modulepreload" href="/minesweeper/minesweeper_web-a592177f8a6658e4.js" crossorigin=anonymous integrity="sha384-wrTCIJQV4OckJ5v+mw/S84ZWcUE4vrmHSLgQ2yjhWvsGRg6z0wWOdqKMP/rn/u+a">
-<link rel="preload" href="/minesweeper/minesweeper_web-a592177f8a6658e4_bg.wasm" crossorigin=anonymous integrity="sha384-q8JbF6/6OK61ZHC+nOHYj44/cQpAEvXm+LrYYsafZDblA9cpXJNwDJZjdRkcBARy" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="/minesweeper/minesweeper_web-3d77f779a6ebea28.js" crossorigin=anonymous integrity="sha384-2FvBRpK9iEpBIwNHUC9gytXOPTS/7gQ0lgjYUPS6D/zUtJPpD2KqWhav4RSLzDbQ">
+<link rel="preload" href="/minesweeper/minesweeper_web-3d77f779a6ebea28_bg.wasm" crossorigin=anonymous integrity="sha384-lEUJBGVXuckLfMnqhQkktfqhdtjw/awaTsZkupWWNIXpbzSPPqVgQieviQC8Pdo9" as="fetch" type="application/wasm"></head>
 
 <body>
     <!-- The WASM code will resize the canvas dynamically -->
